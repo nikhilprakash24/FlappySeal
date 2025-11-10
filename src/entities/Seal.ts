@@ -92,8 +92,15 @@ export class Seal {
 
   /**
    * Update physics and position
+   * @param waterForces Optional water current forces from WaterPhysicsSystem
    */
-  update(): void {
+  update(waterForces?: { deltaX: number; deltaY: number }): void {
+    // Apply water forces before physics calculations
+    if (waterForces) {
+      this.x += waterForces.deltaX;
+      this.y += waterForces.deltaY;
+    }
+
     // Apply gravity
     this.velocity += SEAL_CONFIG.GRAVITY;
 

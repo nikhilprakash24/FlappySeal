@@ -11,6 +11,7 @@ import { ScoreManager } from '../systems/ScoreManager';
 import { ParticleManager } from '../systems/ParticleManager';
 import { BackgroundManager } from '../systems/BackgroundManager';
 import { AudioManager } from '../systems/AudioManager';
+import { WaterPhysicsSystem } from '../systems/WaterPhysicsSystem';
 import { SEAL_CONFIG, UI_CONFIG, GAME_CONFIG, AUDIO_CONFIG } from '../config/constants';
 import { GameState } from '../types';
 
@@ -21,6 +22,7 @@ export class GameScene extends Phaser.Scene {
   private particleManager?: ParticleManager;
   private backgroundManager?: BackgroundManager;
   private audioManager?: AudioManager;
+  private waterPhysics?: WaterPhysicsSystem;
   private gameState: GameState = GameState.PLAYING;
   private isGameStarted: boolean = false;
 
@@ -42,6 +44,14 @@ export class GameScene extends Phaser.Scene {
 
     // Initialize audio manager
     this.audioManager = new AudioManager(this);
+
+    // Initialize water physics system (EXPERIMENTAL)
+    this.waterPhysics = new WaterPhysicsSystem(this, {
+      enableCurrents: true,
+      currentStrength: 1.0,
+      turbulenceFrequency: 2000,
+      diveResistance: 0.7,
+    });
 
     // Initialize seal
     this.seal = new Seal(this, SEAL_CONFIG.START_X, SEAL_CONFIG.START_Y);
@@ -327,8 +337,26 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Update seal physics
-    this.seal.update();
+    // Update water physics system
+    if (this.waterPhysics) {
+      this.waterPhysics.update(time);
+    }
+
+    // Calculate water forces and apply to seal
+    let waterForces = undefined;
+    if (this.waterPhysics) {
+      const isDiving = this.seal.getVelocity() > 5;
+      waterForces = this.waterPhysics.applyForces(
+        this.seal.x,
+        this.seal.y,
+        0, // velocityX (seal doesn't move horizontally on its own)
+        this.seal.getVelocity(),
+        isDiving
+      );
+    }
+
+    // Update seal physics with water forces
+    this.seal.update(waterForces);
 
     // Create swim trail effect
     if (this.particleManager && time % 100 < 16) {
@@ -385,6 +413,7 @@ export class GameScene extends Phaser.Scene {
     this.particleManager?.destroy();
     this.backgroundManager?.destroy();
     this.audioManager?.destroy();
+    this.waterPhysics?.destroy();
     this.input.removeAllListeners();
   }
 }
