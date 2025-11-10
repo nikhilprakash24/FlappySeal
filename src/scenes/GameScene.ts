@@ -11,6 +11,7 @@ import { ScoreManager } from '../systems/ScoreManager';
 import { ParticleManager } from '../systems/ParticleManager';
 import { BackgroundManager } from '../systems/BackgroundManager';
 import { AudioManager } from '../systems/AudioManager';
+import { PowerUpSystem, PowerUpType } from '../systems/PowerUpSystem';
 import { SEAL_CONFIG, UI_CONFIG, GAME_CONFIG, AUDIO_CONFIG } from '../config/constants';
 import { GameState } from '../types';
 
@@ -21,6 +22,7 @@ export class GameScene extends Phaser.Scene {
   private particleManager?: ParticleManager;
   private backgroundManager?: BackgroundManager;
   private audioManager?: AudioManager;
+  private powerUpSystem?: PowerUpSystem;
   private gameState: GameState = GameState.PLAYING;
   private isGameStarted: boolean = false;
 
@@ -42,6 +44,10 @@ export class GameScene extends Phaser.Scene {
 
     // Initialize audio manager
     this.audioManager = new AudioManager(this);
+
+    // Initialize power-up system (v0.2)
+    this.powerUpSystem = new PowerUpSystem(this);
+    this.setupPowerUpEvents();
 
     // Initialize seal
     this.seal = new Seal(this, SEAL_CONFIG.START_X, SEAL_CONFIG.START_Y);
@@ -176,6 +182,29 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Setup power-up event listeners
+   */
+  private setupPowerUpEvents(): void {
+    // Power-up collected
+    this.events.on('powerup-collected', (data: any) => {
+      if (this.particleManager) {
+        this.particleManager.createExplosion(data.x, data.y);
+        this.particleManager.createScorePop(data.x, data.y);
+      }
+      this.audioManager?.playSFX('powerup_collect');
+    });
+
+    // Power-up activated
+    this.events.on('powerup-activated', (data: any) => {
+      this.audioManager?.playSFX('powerup_activate');
+    });
+
+    // Power-up expired
+    this.events.on('powerup-expired', (data: any) => {
+      this.audioManager?.playSFX('powerup_end');
+    });
+  }
 
   /**
    * Start the game
@@ -313,6 +342,7 @@ export class GameScene extends Phaser.Scene {
     this.obstacleManager?.reset();
     this.scoreManager?.reset();
     this.scoreManager?.show();
+    this.powerUpSystem?.reset();
 
     // Reset state
     this.gameState = GameState.PLAYING;
@@ -327,6 +357,18 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // Update power-up system
+    if (this.powerUpSystem) {
+      const sealBounds = this.seal.getBounds();
+      this.powerUpSystem.update(
+        time,
+        this.seal.x,
+        this.seal.y,
+        sealBounds.width,
+        sealBounds.height
+      );
+    }
+
     // Update seal physics
     this.seal.update();
 
@@ -335,9 +377,10 @@ export class GameScene extends Phaser.Scene {
       this.particleManager.createTrail(this.seal.x - 30, this.seal.y);
     }
 
-    // Check boundary collisions
-    if (this.seal.isHittingTop() || this.seal.isHittingBottom()) {
-      this.gameOver();
+    // Check boundary collisions (unless ghost mode is active)
+    const shouldCheckCollision = !this.powerUpSystem?.shouldIgnoreCollision();
+    if (shouldCheckCollision && (this.seal.isHittingTop() || this.seal.isHittingBottom())) {
+      this.handleCollision();
       return;
     }
 
@@ -345,7 +388,9 @@ export class GameScene extends Phaser.Scene {
     if (this.obstacleManager && this.scoreManager) {
       const pointsEarned = this.obstacleManager.update(time, this.seal.x);
       if (pointsEarned > 0) {
-        this.scoreManager.addPoints(pointsEarned);
+        // Apply score multiplier from power-ups
+        const multiplier = this.powerUpSystem?.getScoreMultiplier() || 1;
+        this.scoreManager.addPoints(pointsEarned * multiplier);
         // Create score celebration effect
         if (this.particleManager) {
           this.particleManager.createScorePop(this.seal.x, this.seal.y);
@@ -359,20 +404,49 @@ export class GameScene extends Phaser.Scene {
         this.backgroundManager.update(this.obstacleManager.getScrollSpeed());
       }
 
-      // Check obstacle collisions
+      // Check obstacle collisions (with modified hitbox from power-ups)
       const sealBounds = this.seal.getBounds();
+      const hitboxScale = this.powerUpSystem?.getHitboxScale() || 1.0;
+      const scaledWidth = sealBounds.width * hitboxScale;
+      const scaledHeight = sealBounds.height * hitboxScale;
+
       const collision = this.obstacleManager.checkCollision(
-        sealBounds.x,
-        sealBounds.y,
-        sealBounds.width,
-        sealBounds.height
+        sealBounds.x + (sealBounds.width - scaledWidth) / 2,
+        sealBounds.y + (sealBounds.height - scaledHeight) / 2,
+        scaledWidth,
+        scaledHeight
       );
 
-      if (collision) {
-        this.gameOver();
+      if (collision && shouldCheckCollision) {
+        this.handleCollision();
         return;
       }
     }
+  }
+
+  /**
+   * Handle collision (check for shield, then game over)
+   */
+  private handleCollision(): void {
+    // Check if shield is active
+    if (this.powerUpSystem?.isActive(PowerUpType.SHIELD)) {
+      // Use shield to absorb collision
+      this.powerUpSystem.usePowerUp(PowerUpType.SHIELD);
+
+      // Visual feedback - flash and sound
+      if (this.particleManager && this.seal) {
+        this.particleManager.createExplosion(this.seal.x, this.seal.y);
+      }
+      this.audioManager?.playSFX('shield_break');
+
+      // Camera shake for impact
+      this.cameras.main.shake(200, 0.01);
+
+      return; // Survive the collision
+    }
+
+    // No shield - game over
+    this.gameOver();
   }
 
   /**
@@ -385,6 +459,8 @@ export class GameScene extends Phaser.Scene {
     this.particleManager?.destroy();
     this.backgroundManager?.destroy();
     this.audioManager?.destroy();
+    this.powerUpSystem?.destroy();
+    this.events.removeAllListeners();
     this.input.removeAllListeners();
   }
 }
