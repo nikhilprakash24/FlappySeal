@@ -9,7 +9,7 @@ import { GameMode, GameModeType, GameModeConfig, GameModeRules, GameModeResults 
 import { GAME_CONFIG } from '../config/constants';
 
 export class EndlessMode extends GameMode {
-  private obstacles Passed: number = 0;
+  private obstaclesPassed: number = 0;
 
   constructor(scene: Phaser.Scene) {
     const config: GameModeConfig = {

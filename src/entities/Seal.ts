@@ -8,6 +8,7 @@
 import Phaser from 'phaser';
 import { SEAL_CONFIG } from '../config/constants';
 import { clamp } from '../utils/helpers';
+import { getSealSkin, SealSkin } from '../config/sealSkins';
 import type { Bounds } from '../types';
 
 export class Seal {
@@ -19,11 +20,13 @@ export class Seal {
   private rotation: number = 0;
   private flipperOffset: number = 0;
   private flipperDirection: number = 1;
+  private skin: SealSkin;
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, skinId: string = 'seal_default') {
     this.scene = scene;
     this.x = x;
     this.y = y;
+    this.skin = getSealSkin(skinId);
 
     // Create graphics object for rendering
     this.graphics = scene.add.graphics();
@@ -41,18 +44,26 @@ export class Seal {
     this.graphics.setRotation(Phaser.Math.DegToRad(this.rotation));
 
     // Draw seal relative to (0, 0) since position is set above
-    // Seal body (dark gray)
-    this.graphics.fillStyle(0x3a3a3a, 1);
-    this.graphics.fillEllipse(0, 0, 60, 35);
+    // Seal body (using skin color)
+    this.graphics.fillStyle(this.skin.colors.body, 1);
+    this.graphics.fillEllipse(0, 0, this.skin.size.width, this.skin.size.height);
 
     // Seal head
     this.graphics.fillEllipse(40, -5, 35, 30);
 
+    // Belly (if defined)
+    if (this.skin.colors.belly) {
+      this.graphics.fillStyle(this.skin.colors.belly, 1);
+      this.graphics.fillEllipse(0, 8, this.skin.size.width * 0.7, this.skin.size.height * 0.6);
+    }
+
     // Animated flippers
+    this.graphics.fillStyle(this.skin.colors.flippers, 1);
     this.graphics.fillEllipse(-20, 15 + this.flipperOffset, 25, 15);
     this.graphics.fillEllipse(10, 15 + this.flipperOffset, 25, 15);
 
     // Tail
+    this.graphics.fillStyle(this.skin.colors.flippers, 1);
     this.graphics.fillTriangle(
       -35, -10,
       -35, 10,
@@ -60,13 +71,13 @@ export class Seal {
     );
 
     // Eye
-    this.graphics.fillStyle(0xffffff, 1);
+    this.graphics.fillStyle(this.skin.colors.eyes, 1);
     this.graphics.fillCircle(45, -10, 5);
     this.graphics.fillStyle(0x000000, 1);
     this.graphics.fillCircle(47, -10, 3);
 
     // Nose
-    this.graphics.fillStyle(0x000000, 1);
+    this.graphics.fillStyle(this.skin.colors.nose, 1);
     this.graphics.fillCircle(58, 0, 3);
 
     // Whiskers
