@@ -114,13 +114,14 @@ export class MenuScene extends Phaser.Scene {
   private createMenuButtons(): void {
     const buttonConfig = [
       { text: '▶ Play', key: 'play', color: UI_CONFIG.COLORS.SUCCESS },
+      { text: '🐾 Select Animal', key: 'character', color: UI_CONFIG.COLORS.PRIMARY },
       { text: '🎨 Unlocks', key: 'unlocks', color: UI_CONFIG.COLORS.PRIMARY },
       { text: '🏆 Achievements', key: 'achievements', color: UI_CONFIG.COLORS.WARNING },
       { text: '⚙️ Settings', key: 'settings', color: UI_CONFIG.COLORS.SECONDARY },
     ];
 
-    const startY = 280;
-    const spacing = 80;
+    const startY = 260;
+    const spacing = 70;
 
     buttonConfig.forEach((config, index) => {
       const button = this.createButton(
@@ -132,6 +133,9 @@ export class MenuScene extends Phaser.Scene {
       );
       this.buttons.push(button);
     });
+
+    // Show currently selected character
+    this.showSelectedCharacter();
   }
 
   /**
@@ -227,6 +231,11 @@ export class MenuScene extends Phaser.Scene {
         case 'play':
           this.scene.start('ModeSelectionScene');
           break;
+        case 'character':
+          // TODO: Get player's total score for unlock checks
+          const playerScore = 0; // Replace with actual score from save system
+          this.scene.start('CharacterSelectScene', { playerTotalScore: playerScore });
+          break;
         case 'unlocks':
           this.scene.start('UnlockScene');
           break;
@@ -240,6 +249,50 @@ export class MenuScene extends Phaser.Scene {
           break;
       }
     });
+  }
+
+  /**
+   * Show currently selected character
+   */
+  private showSelectedCharacter(): void {
+    // Get selected character from localStorage
+    const selectedId = localStorage.getItem('flappyseal_selected_character') || 'seal';
+
+    // Create a small indicator showing current animal
+    const indicator = this.add.text(
+      GAME_CONFIG.WIDTH / 2,
+      210,
+      `Current: ${this.getCharacterName(selectedId)}`,
+      {
+        fontSize: '18px',
+        color: UI_CONFIG.COLORS.PRIMARY,
+        fontFamily: 'Arial',
+        stroke: '#000000',
+        strokeThickness: 3,
+      }
+    ).setOrigin(0.5);
+
+    // Pulse animation
+    this.tweens.add({
+      targets: indicator,
+      alpha: 0.6,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  /**
+   * Get character display name from ID
+   */
+  private getCharacterName(id: string): string {
+    switch (id) {
+      case 'otter': return '🦦 Otter';
+      case 'sealion': return '🦭 Sea Lion';
+      case 'seal':
+      default: return '🦭 Seal';
+    }
   }
 
   /**

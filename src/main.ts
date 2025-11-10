@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { MenuScene } from './scenes/MenuScene';
+import { CharacterSelectScene } from './scenes/CharacterSelectScene';
 import { GameScene } from './scenes/GameScene';
 import { UnlockScene } from './scenes/UnlockScene';
 import { AchievementScene } from './scenes/AchievementScene';
@@ -18,7 +19,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-  scene: [MenuScene, ModeSelectionScene, GameScene, UnlockScene, AchievementScene],
+  scene: [MenuScene, CharacterSelectScene, ModeSelectionScene, GameScene, UnlockScene, AchievementScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
