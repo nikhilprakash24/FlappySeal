@@ -90,6 +90,72 @@ Stack confirmed, proceeding with confidence.
 
 ---
 
+## Decision #004: Configuration Architecture
+**Date**: 2025-11-10
+**Decider**: Autonomous Development Team (Claude)
+**Status**: Implemented
+
+### Context
+Need a maintainable way to manage game constants and configuration without scattering magic numbers throughout the code.
+
+### Decision
+Create centralized configuration system with:
+- `src/config/constants.ts`: All game values organized by feature
+- `src/config/gameConfig.ts`: Phaser configuration factory
+- TypeScript `const` assertions for immutability
+- Feature-based organization (SEAL_CONFIG, OBSTACLE_CONFIG, etc.)
+
+### Alternatives Considered
+1. Scattered constants in each file - Rejected: Hard to tune, find, maintain
+2. Single flat constants object - Rejected: Hard to navigate, no organization
+3. Class-based configuration - Rejected: Overkill for simple values
+4. JSON configuration files - Rejected: Loses type safety
+
+### Rationale
+- Easy to find and modify values
+- Type-safe with autocomplete
+- Clear organization by feature
+- Immutable via `const` assertions
+- Single source of truth
+- Easy to add environment-specific overrides later
+
+### Outcome
+Configuration system created with comprehensive constants for all game features. Tuning game parameters is now trivial.
+
+---
+
+## Decision #005: Obstacle System Design
+**Date**: 2025-11-10
+**Decider**: Autonomous Development Team (Claude)
+**Status**: Proposed
+
+### Context
+Need to implement the core obstacle spawning and movement system. Must decide on architecture pattern.
+
+### Decision
+Implement using Manager pattern with:
+- `Obstacle` class: Individual obstacle entity
+- `ObstacleManager` class: Handles spawning, pooling, collision checking
+- Object pooling for performance
+- Configurable obstacle types (coral, jellyfish)
+
+### Alternatives Considered
+1. Direct spawning in GameScene - Rejected: Couples game logic to scene
+2. ECS (Entity Component System) - Rejected: Overkill for this scale
+3. Spawning via Phaser Groups only - Rejected: Need custom logic
+
+### Rationale
+- Manager pattern provides clear separation of concerns
+- Object pooling prevents garbage collection spikes
+- Easy to test in isolation
+- Can swap/extend obstacle types easily
+- Phaser Groups handle rendering, Manager handles logic
+
+### Outcome
+Will implement Obstacle and ObstacleManager classes with pooling.
+
+---
+
 ## Template for Future Decisions
 
 ## Decision #XXX: [Decision Title]
