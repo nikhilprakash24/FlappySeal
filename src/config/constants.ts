@@ -37,8 +37,8 @@ export const SEAL_CONFIG = {
 export const OBSTACLE_CONFIG = {
   // Spawning
   SPAWN_INTERVAL: 2500, // milliseconds
-  MIN_GAP: 180,
-  MAX_GAP: 220,
+  MIN_GAP: 200,
+  MAX_GAP: 240,
 
   // Movement
   SCROLL_SPEED: 3,

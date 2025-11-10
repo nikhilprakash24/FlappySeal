@@ -34,42 +34,44 @@ export class Seal {
   private draw(): void {
     this.graphics.clear();
 
+    // Set position and rotation of graphics object
+    this.graphics.setPosition(this.x, this.y);
+    this.graphics.setRotation(Phaser.Math.DegToRad(this.rotation));
+
+    // Draw seal relative to (0, 0) since position is set above
     // Seal body (dark gray)
     this.graphics.fillStyle(0x3a3a3a, 1);
-    this.graphics.fillEllipse(this.x, this.y, 60, 35);
+    this.graphics.fillEllipse(0, 0, 60, 35);
 
     // Seal head
-    this.graphics.fillEllipse(this.x + 40, this.y - 5, 35, 30);
+    this.graphics.fillEllipse(40, -5, 35, 30);
 
     // Flippers
-    this.graphics.fillEllipse(this.x - 20, this.y + 15, 25, 15);
-    this.graphics.fillEllipse(this.x + 10, this.y + 15, 25, 15);
+    this.graphics.fillEllipse(-20, 15, 25, 15);
+    this.graphics.fillEllipse(10, 15, 25, 15);
 
     // Tail
     this.graphics.fillTriangle(
-      this.x - 35, this.y - 10,
-      this.x - 35, this.y + 10,
-      this.x - 50, this.y
+      -35, -10,
+      -35, 10,
+      -50, 0
     );
 
     // Eye
     this.graphics.fillStyle(0xffffff, 1);
-    this.graphics.fillCircle(this.x + 45, this.y - 10, 5);
+    this.graphics.fillCircle(45, -10, 5);
     this.graphics.fillStyle(0x000000, 1);
-    this.graphics.fillCircle(this.x + 47, this.y - 10, 3);
+    this.graphics.fillCircle(47, -10, 3);
 
     // Nose
     this.graphics.fillStyle(0x000000, 1);
-    this.graphics.fillCircle(this.x + 58, this.y, 3);
+    this.graphics.fillCircle(58, 0, 3);
 
     // Whiskers
     this.graphics.lineStyle(1, 0x000000, 0.5);
     for (let i = -1; i <= 1; i++) {
-      this.graphics.lineBetween(this.x + 55, this.y + i * 5, this.x + 70, this.y + i * 7);
+      this.graphics.lineBetween(55, i * 5, 70, i * 7);
     }
-
-    // Apply rotation to graphics object
-    this.graphics.setRotation(Phaser.Math.DegToRad(this.rotation));
   }
 
   /**
