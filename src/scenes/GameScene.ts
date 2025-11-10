@@ -5,7 +5,11 @@
  */
 
 import Phaser from 'phaser';
+import { Character } from '../entities/Character';
 import { Seal } from '../entities/Seal';
+import { Otter } from '../entities/Otter';
+import { SeaLion } from '../entities/SeaLion';
+import { getCharacterConfig, CharacterType } from '../config/characters';
 import { ObstacleManager } from '../systems/ObstacleManager';
 import { ScoreManager } from '../systems/ScoreManager';
 import { ParticleManager } from '../systems/ParticleManager';
@@ -22,7 +26,7 @@ import { SEAL_CONFIG, UI_CONFIG, GAME_CONFIG, AUDIO_CONFIG, OBSTACLE_CONFIG } fr
 import { GameState } from '../types';
 
 export class GameScene extends Phaser.Scene {
-  private seal?: Seal;
+  private player?: Character;  // Polymorphic: can be Seal, Otter, or SeaLion
   private obstacleManager?: ObstacleManager;
   private scoreManager?: ScoreManager;
   private particleManager?: ParticleManager;
@@ -71,6 +75,33 @@ export class GameScene extends Phaser.Scene {
     this.gameMode.init();
   }
 
+  /**
+   * Create character based on selection from registry
+   */
+  private createCharacter(): Character {
+    // Get character type from registry (default to seal)
+    const characterType = this.registry.get('characterType') as CharacterType || CharacterType.SEAL;
+
+    const x = SEAL_CONFIG.START_X;
+    const y = SEAL_CONFIG.START_Y;
+
+    // Factory pattern: create appropriate character
+    switch (characterType) {
+      case CharacterType.OTTER:
+        console.log('[GameScene] Creating Otter character');
+        return new Otter(this, x, y);
+
+      case CharacterType.SEALION:
+        console.log('[GameScene] Creating Sea Lion character');
+        return new SeaLion(this, x, y);
+
+      case CharacterType.SEAL:
+      default:
+        console.log('[GameScene] Creating Seal character');
+        return new Seal(this, x, y);
+    }
+  }
+
   create(): void {
     // Initialize game mode from registry (or default to endless)
     this.initializeGameMode();
@@ -90,8 +121,8 @@ export class GameScene extends Phaser.Scene {
       this.setupPowerUpEvents();
     }
 
-    // Initialize seal
-    this.seal = new Seal(this, SEAL_CONFIG.START_X, SEAL_CONFIG.START_Y);
+    // Initialize player character (polymorphic based on selection)
+    this.player = this.createCharacter();
 
     // Initialize debug manager for testing and tuning
     this.debugManager = new DebugManager(this);
@@ -176,15 +207,15 @@ export class GameScene extends Phaser.Scene {
    * Expose variables to debug manager for real-time tuning
    */
   private exposeDebugVariables(): void {
-    if (!this.debugManager || !this.seal) return;
+    if (!this.debugManager || !this.player) return;
 
     // Player Physics
     this.debugManager.expose(
       'Player Physics',
       'Gravity',
       'player.gravity',
-      () => this.seal!.getGravity(),
-      (val) => this.seal!.setGravity(val),
+      () => this.player!.getGravity(),
+      (val) => this.player!.setGravity(val),
       {
         min: 0,
         max: 3,
@@ -199,8 +230,8 @@ export class GameScene extends Phaser.Scene {
       'Player Physics',
       'Swim Up Force',
       'player.swimUpForce',
-      () => this.seal!.getSwimUpForce(),
-      (val) => this.seal!.setSwimUpForce(val),
+      () => this.player!.getSwimUpForce(),
+      (val) => this.player!.setSwimUpForce(val),
       {
         min: 1,
         max: 20,
@@ -215,8 +246,8 @@ export class GameScene extends Phaser.Scene {
       'Player Physics',
       'Dive Down Force',
       'player.diveDownForce',
-      () => this.seal!.getDiveDownForce(),
-      (val) => this.seal!.setDiveDownForce(val),
+      () => this.player!.getDiveDownForce(),
+      (val) => this.player!.setDiveDownForce(val),
       {
         min: 1,
         max: 30,
@@ -231,8 +262,8 @@ export class GameScene extends Phaser.Scene {
       'Player Physics',
       'Max Velocity',
       'player.maxVelocity',
-      () => this.seal!.getMaxVelocity(),
-      (val) => this.seal!.setMaxVelocity(val),
+      () => this.player!.getMaxVelocity(),
+      (val) => this.player!.setMaxVelocity(val),
       {
         min: 5,
         max: 40,
@@ -269,20 +300,20 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
-      if (this.gameState === GameState.PLAYING && this.seal && this.particleManager) {
+      if (this.gameState === GameState.PLAYING && this.player && this.particleManager) {
         const centerX = this.cameras.main.width / 2;
 
         if (pointer.x < centerX) {
           // Left side: Swim up
-          this.seal.swimUp();
-          this.particleManager.createSplash(this.seal.x, this.seal.y, true);
-          this.particleManager.createBubbleStream(this.seal.x - 30, this.seal.y, 3);
+          this.player.swimUp();
+          this.particleManager.createSplash(this.player.x, this.player.y, true);
+          this.particleManager.createBubbleStream(this.player.x - 30, this.player.y, 3);
           this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.SWIM_UP);
         } else {
           // Right side: Dive down
-          this.seal.dive();
-          this.particleManager.createSplash(this.seal.x, this.seal.y, false);
-          this.particleManager.createBubbleStream(this.seal.x - 30, this.seal.y, 3);
+          this.player.dive();
+          this.particleManager.createSplash(this.player.x, this.player.y, false);
+          this.particleManager.createBubbleStream(this.player.x - 30, this.player.y, 3);
           this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.DIVE_DOWN);
         }
       }
@@ -290,14 +321,14 @@ export class GameScene extends Phaser.Scene {
 
     // Keyboard controls
     this.input.keyboard?.on('keydown-UP', () => {
-      if (this.gameState === GameState.PLAYING && this.seal) {
-        this.seal.swimUp();
+      if (this.gameState === GameState.PLAYING && this.player) {
+        this.player.swimUp();
       }
     });
 
     this.input.keyboard?.on('keydown-DOWN', () => {
-      if (this.gameState === GameState.PLAYING && this.seal) {
-        this.seal.dive();
+      if (this.gameState === GameState.PLAYING && this.player) {
+        this.player.dive();
       }
     });
 
@@ -369,8 +400,8 @@ export class GameScene extends Phaser.Scene {
     this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.COLLISION);
 
     // Create collision explosion effect
-    if (this.seal && this.particleManager) {
-      this.particleManager.createExplosion(this.seal.x, this.seal.y);
+    if (this.player && this.particleManager) {
+      this.particleManager.createExplosion(this.player.x, this.player.y);
     }
 
     // Delayed game over sound and show results
@@ -477,7 +508,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Reset all systems
-    this.seal?.reset(SEAL_CONFIG.START_X, SEAL_CONFIG.START_Y);
+    this.player?.reset(SEAL_CONFIG.START_X, SEAL_CONFIG.START_Y);
     this.obstacleManager?.reset();
     this.scoreManager?.reset();
     this.scoreManager?.show();
@@ -498,7 +529,7 @@ export class GameScene extends Phaser.Scene {
       this.debugManager.render();
     }
 
-    if (this.gameState !== GameState.PLAYING || !this.seal) {
+    if (this.gameState !== GameState.PLAYING || !this.player) {
       return;
     }
 
@@ -521,34 +552,34 @@ export class GameScene extends Phaser.Scene {
 
     // Update power-up system
     if (this.powerUpSystem) {
-      const sealBounds = this.seal.getBounds();
+      const sealBounds = this.player.getBounds();
       this.powerUpSystem.update(
         time,
-        this.seal.x,
-        this.seal.y,
+        this.player.x,
+        this.player.y,
         sealBounds.width,
         sealBounds.height
       );
     }
 
     // Update seal physics
-    this.seal.update();
+    this.player.update();
 
     // Create swim trail effect
     if (this.particleManager && time % 100 < 16) {
-      this.particleManager.createTrail(this.seal.x - 30, this.seal.y);
+      this.particleManager.createTrail(this.player.x - 30, this.player.y);
     }
 
     // Check boundary collisions (unless ghost mode is active)
     const shouldCheckCollision = !this.powerUpSystem?.shouldIgnoreCollision();
-    if (shouldCheckCollision && (this.seal.isHittingTop() || this.seal.isHittingBottom())) {
+    if (shouldCheckCollision && (this.player.isHittingTop() || this.player.isHittingBottom())) {
       this.handleCollision();
       return;
     }
 
     // Update obstacles and check for points
     if (this.obstacleManager && this.scoreManager) {
-      const pointsEarned = this.obstacleManager.update(time, this.seal.x);
+      const pointsEarned = this.obstacleManager.update(time, this.player.x);
       if (pointsEarned > 0) {
         // Apply score multiplier from power-ups
         const multiplier = this.powerUpSystem?.getScoreMultiplier() || 1;
@@ -566,7 +597,7 @@ export class GameScene extends Phaser.Scene {
 
         // Create score celebration effect
         if (this.particleManager) {
-          this.particleManager.createScorePop(this.seal.x, this.seal.y);
+          this.particleManager.createScorePop(this.player.x, this.player.y);
         }
         // Play score sound
         this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.SCORE);
@@ -578,7 +609,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Check obstacle collisions (with modified hitbox from power-ups)
-      const sealBounds = this.seal.getBounds();
+      const sealBounds = this.player.getBounds();
       const hitboxScale = this.powerUpSystem?.getHitboxScale() || 1.0;
       const scaledWidth = sealBounds.width * hitboxScale;
       const scaledHeight = sealBounds.height * hitboxScale;
@@ -607,8 +638,8 @@ export class GameScene extends Phaser.Scene {
       this.powerUpSystem.usePowerUp(PowerUpType.SHIELD);
 
       // Visual feedback - flash and sound
-      if (this.particleManager && this.seal) {
-        this.particleManager.createExplosion(this.seal.x, this.seal.y);
+      if (this.particleManager && this.player) {
+        this.particleManager.createExplosion(this.player.x, this.player.y);
       }
       this.audioManager?.playSFX('shield_break');
 
@@ -796,7 +827,7 @@ export class GameScene extends Phaser.Scene {
    * Clean up when scene is shut down
    */
   shutdown(): void {
-    this.seal?.destroy();
+    this.player?.destroy();
     this.obstacleManager?.destroy();
     this.scoreManager?.destroy();
     this.particleManager?.destroy();

@@ -337,13 +337,58 @@ Each entry includes:
 
 ---
 
+### Entry #9
+**Timestamp:** 2025-11-10
+**Task ID:** 3.6
+**Status:** ✅ Complete
+**Duration:** ~30 minutes
+**Description:** Update GameScene for Polymorphic Character Support
+
+**Actions Taken:**
+- Modified `src/scenes/GameScene.ts`
+  - Changed `private seal?: Seal` → `private player?: Character`
+  - Added imports for all character types
+  - Created `createCharacter()` factory method
+  - Reads `characterType` from registry (defaults to SEAL)
+  - Factory creates appropriate character (Seal, Otter, or SeaLion)
+  - Updated all 37 references from `this.seal` to `this.player`
+
+**Factory Method:**
+```typescript
+private createCharacter(): Character {
+  const characterType = this.registry.get('characterType') || CharacterType.SEAL;
+
+  switch (characterType) {
+    case CharacterType.OTTER: return new Otter(this, x, y);
+    case CharacterType.SEALION: return new SeaLion(this, x, y);
+    case CharacterType.SEAL:
+    default: return new Seal(this, x, y);
+  }
+}
+```
+
+**Issues:** None
+
+**Solutions:** N/A
+
+**Commit:** Pending
+
+**Notes:**
+- Build successful (0 errors)
+- All animals now playable in GameScene
+- Polymorphic character system fully functional
+- No breaking changes to gameplay logic
+- Ready for character selection UI
+
+---
+
 ## Running Statistics
 
-**Total Tasks Completed:** 8
-**Total Time Spent:** ~275 minutes (~4.6 hours)
-**Current Phase:** 3 (Animal System - Implementation Complete!)
-**Commits Made:** 3 (infrastructure, debug, configs)
-**Builds Successful:** 3
+**Total Tasks Completed:** 9
+**Total Time Spent:** ~305 minutes (~5.1 hours)
+**Current Phase:** 4 (GameScene Integration Complete!)
+**Commits Made:** 5 (infra, debug, configs, characters, summary)
+**Builds Successful:** 4
 **Tests Passed:** 0 (manual testing pending)
 
 **Progress:**
