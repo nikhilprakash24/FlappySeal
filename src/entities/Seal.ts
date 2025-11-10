@@ -17,6 +17,8 @@ export class Seal {
   public y: number;
   private velocity: number = 0;
   private rotation: number = 0;
+  private flipperOffset: number = 0;
+  private flipperDirection: number = 1;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
@@ -46,9 +48,9 @@ export class Seal {
     // Seal head
     this.graphics.fillEllipse(40, -5, 35, 30);
 
-    // Flippers
-    this.graphics.fillEllipse(-20, 15, 25, 15);
-    this.graphics.fillEllipse(10, 15, 25, 15);
+    // Animated flippers
+    this.graphics.fillEllipse(-20, 15 + this.flipperOffset, 25, 15);
+    this.graphics.fillEllipse(10, 15 + this.flipperOffset, 25, 15);
 
     // Tail
     this.graphics.fillTriangle(
@@ -107,6 +109,12 @@ export class Seal {
       -SEAL_CONFIG.MAX_ROTATION,
       SEAL_CONFIG.MAX_ROTATION
     );
+
+    // Animate flippers
+    this.flipperOffset += this.flipperDirection * 0.5;
+    if (this.flipperOffset > 3 || this.flipperOffset < -3) {
+      this.flipperDirection *= -1;
+    }
 
     // Redraw at new position and rotation
     this.draw();

@@ -8,6 +8,8 @@ import Phaser from 'phaser';
 import { Seal } from '../entities/Seal';
 import { ObstacleManager } from '../systems/ObstacleManager';
 import { ScoreManager } from '../systems/ScoreManager';
+import { ParticleManager } from '../systems/ParticleManager';
+import { BackgroundManager } from '../systems/BackgroundManager';
 import { SEAL_CONFIG, UI_CONFIG, GAME_CONFIG } from '../config/constants';
 import { GameState } from '../types';
 
@@ -15,6 +17,8 @@ export class GameScene extends Phaser.Scene {
   private seal?: Seal;
   private obstacleManager?: ObstacleManager;
   private scoreManager?: ScoreManager;
+  private particleManager?: ParticleManager;
+  private backgroundManager?: BackgroundManager;
   private gameState: GameState = GameState.PLAYING;
   private isGameStarted: boolean = false;
 
@@ -28,11 +32,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Create underwater background
-    this.createWaterEffect();
+    // Initialize background manager (handles parallax and effects)
+    this.backgroundManager = new BackgroundManager(this);
 
-    // Create bubble animation
-    this.createBubbleSystem();
+    // Initialize particle manager
+    this.particleManager = new ParticleManager(this);
 
     // Initialize seal
     this.seal = new Seal(this, SEAL_CONFIG.START_X, SEAL_CONFIG.START_Y);
@@ -55,82 +59,6 @@ export class GameScene extends Phaser.Scene {
     this.setupControls();
   }
 
-  /**
-   * Create underwater visual effects
-   */
-  private createWaterEffect(): void {
-    // Depth layers
-    this.add.rectangle(
-      GAME_CONFIG.WIDTH / 2,
-      GAME_CONFIG.HEIGHT / 2,
-      GAME_CONFIG.WIDTH,
-      GAME_CONFIG.HEIGHT,
-      0x0a4f6e,
-      0.3
-    );
-
-    this.add.rectangle(
-      GAME_CONFIG.WIDTH / 2,
-      GAME_CONFIG.HEIGHT / 2,
-      GAME_CONFIG.WIDTH,
-      GAME_CONFIG.HEIGHT,
-      0x0d5f7e,
-      0.2
-    );
-
-    // Animated light rays
-    for (let i = 0; i < 5; i++) {
-      const ray = this.add.rectangle(
-        100 + i * 180,
-        -100,
-        40,
-        800,
-        0xffffff,
-        0.05
-      ).setAngle(15);
-
-      this.tweens.add({
-        targets: ray,
-        alpha: 0.1,
-        duration: 3000 + i * 500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-    }
-  }
-
-  /**
-   * Create ambient bubble system
-   */
-  private createBubbleSystem(): void {
-    this.time.addEvent({
-      delay: 1000,
-      callback: () => {
-        const bubble = this.add.graphics();
-        const x = Phaser.Math.Between(50, GAME_CONFIG.WIDTH - 50);
-        const y = GAME_CONFIG.HEIGHT + 20;
-        const size = Phaser.Math.Between(5, 15);
-
-        bubble.fillStyle(0xffffff, 0.3);
-        bubble.fillCircle(x, y, size);
-
-        this.tweens.add({
-          targets: bubble,
-          y: -50,
-          x: x + Phaser.Math.Between(-30, 30),
-          alpha: 0,
-          duration: Phaser.Math.Between(3000, 5000),
-          ease: 'Sine.easeInOut',
-          onComplete: () => {
-            bubble.destroy();
-          },
-        });
-      },
-      callbackScope: this,
-      loop: true,
-    });
-  }
 
   /**
    * Create start screen UI
@@ -202,17 +130,19 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
-      if (this.gameState === GameState.PLAYING && this.seal) {
+      if (this.gameState === GameState.PLAYING && this.seal && this.particleManager) {
         const centerX = this.cameras.main.width / 2;
 
         if (pointer.x < centerX) {
           // Left side: Swim up
           this.seal.swimUp();
-          this.createSplashEffect(this.seal.x, this.seal.y, true);
+          this.particleManager.createSplash(this.seal.x, this.seal.y, true);
+          this.particleManager.createBubbleStream(this.seal.x - 30, this.seal.y, 3);
         } else {
           // Right side: Dive down
           this.seal.dive();
-          this.createSplashEffect(this.seal.x, this.seal.y, false);
+          this.particleManager.createSplash(this.seal.x, this.seal.y, false);
+          this.particleManager.createBubbleStream(this.seal.x - 30, this.seal.y, 3);
         }
       }
     });
@@ -239,38 +169,6 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * Create splash particle effect
-   */
-  private createSplashEffect(x: number, y: number, isUp: boolean): void {
-    const graphics = this.add.graphics();
-    const particleCount = 8;
-
-    for (let i = 0; i < particleCount; i++) {
-      const angle = isUp
-        ? Phaser.Math.Between(45, 135)
-        : Phaser.Math.Between(225, 315);
-
-      const speed = Phaser.Math.Between(50, 100);
-      const size = Phaser.Math.Between(2, 5);
-
-      graphics.fillStyle(0xffffff, 0.5);
-      graphics.fillCircle(x, y, size);
-
-      const radians = Phaser.Math.DegToRad(angle);
-      const vx = Math.cos(radians) * speed;
-      const vy = Math.sin(radians) * speed;
-
-      this.tweens.add({
-        targets: graphics,
-        x: x + vx,
-        y: y + vy,
-        alpha: 0,
-        duration: 500,
-        onComplete: () => graphics.destroy(),
-      });
-    }
-  }
 
   /**
    * Start the game
@@ -292,6 +190,11 @@ export class GameScene extends Phaser.Scene {
    */
   private gameOver(): void {
     this.gameState = GameState.GAME_OVER;
+
+    // Create collision explosion effect
+    if (this.seal && this.particleManager) {
+      this.particleManager.createExplosion(this.seal.x, this.seal.y);
+    }
 
     // Game over text
     this.gameOverText = this.add.text(
@@ -409,6 +312,11 @@ export class GameScene extends Phaser.Scene {
     // Update seal physics
     this.seal.update();
 
+    // Create swim trail effect
+    if (this.particleManager && time % 100 < 16) {
+      this.particleManager.createTrail(this.seal.x - 30, this.seal.y);
+    }
+
     // Check boundary collisions
     if (this.seal.isHittingTop() || this.seal.isHittingBottom()) {
       this.gameOver();
@@ -420,6 +328,15 @@ export class GameScene extends Phaser.Scene {
       const pointsEarned = this.obstacleManager.update(time, this.seal.x);
       if (pointsEarned > 0) {
         this.scoreManager.addPoints(pointsEarned);
+        // Create score celebration effect
+        if (this.particleManager) {
+          this.particleManager.createScorePop(this.seal.x, this.seal.y);
+        }
+      }
+
+      // Update parallax background
+      if (this.backgroundManager) {
+        this.backgroundManager.update(this.obstacleManager.getScrollSpeed());
       }
 
       // Check obstacle collisions
@@ -445,6 +362,8 @@ export class GameScene extends Phaser.Scene {
     this.seal?.destroy();
     this.obstacleManager?.destroy();
     this.scoreManager?.destroy();
+    this.particleManager?.destroy();
+    this.backgroundManager?.destroy();
     this.input.removeAllListeners();
   }
 }
