@@ -76,6 +76,10 @@ export class Character {
    */
   public swimUp(): void {
     this.velocity = this.swimUpForce;
+
+    // TODO: Sound effect integration point
+    // this.scene.events.emit('character:swim', this.config.type);
+    // Suggested sound: Splash/whoosh up (pitch varies by character)
   }
 
   /**
@@ -83,6 +87,10 @@ export class Character {
    */
   public dive(): void {
     this.velocity = this.diveDownForce;
+
+    // TODO: Sound effect integration point
+    // this.scene.events.emit('character:dive', this.config.type);
+    // Suggested sound: Splash/whoosh down (pitch varies by character)
   }
 
   /**

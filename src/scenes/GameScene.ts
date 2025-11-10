@@ -16,6 +16,7 @@ import { ParticleManager } from '../systems/ParticleManager';
 import { BackgroundManager } from '../systems/BackgroundManager';
 import { AudioManager } from '../systems/AudioManager';
 import { PowerUpSystem, PowerUpType } from '../systems/PowerUpSystem';
+import { TutorialOverlay } from '../systems/TutorialOverlay';
 import { GameMode, GameModeType } from '../modes/GameMode';
 import { EndlessMode } from '../modes/EndlessMode';
 import { ChallengeMode } from '../modes/ChallengeMode';
@@ -35,6 +36,7 @@ export class GameScene extends Phaser.Scene {
   private powerUpSystem?: PowerUpSystem;
   private gameMode?: GameMode;
   private debugManager?: DebugManager;
+  private tutorialOverlay?: TutorialOverlay;
   private modeUI: Phaser.GameObjects.GameObject[] = [];
   private gameState: GameState = GameState.PLAYING;
   private isGameStarted: boolean = false;
@@ -146,6 +148,26 @@ export class GameScene extends Phaser.Scene {
 
     // Setup controls
     this.setupControls();
+
+    // Initialize tutorial overlay
+    this.tutorialOverlay = new TutorialOverlay(this);
+
+    // Listen for tutorial events
+    this.events.on('tutorial:complete', () => {
+      console.log('[GameScene] Tutorial completed!');
+      // Start game after tutorial completes
+      if (!this.isGameStarted) {
+        this.startGame();
+      }
+    });
+
+    this.events.on('tutorial:skipped', () => {
+      console.log('[GameScene] Tutorial skipped');
+      // Start game after tutorial is skipped
+      if (!this.isGameStarted) {
+        this.startGame();
+      }
+    });
   }
 
 
@@ -369,10 +391,21 @@ export class GameScene extends Phaser.Scene {
    * Start the game
    */
   private startGame(): void {
+    // Check if tutorial should be shown (first-time players only)
+    if (this.tutorialOverlay && this.tutorialOverlay.shouldShow()) {
+      console.log('[GameScene] Showing tutorial for first-time player');
+      // Hide start screen UI
+      this.titleText?.destroy();
+      this.instructionText?.destroy();
+      // Show tutorial (will call startGame again after completion)
+      this.tutorialOverlay.start();
+      return;
+    }
+
     this.isGameStarted = true;
     this.gameState = GameState.PLAYING;
 
-    // Hide start screen UI
+    // Hide start screen UI (if not already hidden)
     this.titleText?.destroy();
     this.instructionText?.destroy();
 

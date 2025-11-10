@@ -64,10 +64,18 @@ export class ScoreManager {
     this.currentScore += points;
     this.updateDisplay();
 
+    // TODO: Sound effect integration point
+    // this.scene.events.emit('score:increase', points, this.currentScore);
+    // Suggested sound: Ding/chime (pitch increases with combo/multiplier)
+
     // Check and update high score
     if (this.currentScore > this.highScore) {
       this.highScore = this.currentScore;
       storage.setHighScore(this.highScore);
+
+      // TODO: Sound effect integration point
+      // this.scene.events.emit('score:newrecord', this.highScore);
+      // Suggested sound: Fanfare/celebration
 
       // Visual feedback for new high score
       if (this.highScoreText) {

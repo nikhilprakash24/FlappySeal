@@ -90,6 +90,20 @@ class StorageManager {
   }
 
   /**
+   * Check if tutorial has been completed (alias for getTutorialSeen)
+   */
+  getTutorialComplete(): boolean {
+    return this.getTutorialSeen();
+  }
+
+  /**
+   * Mark tutorial as complete (alias for setTutorialSeen)
+   */
+  setTutorialComplete(complete: boolean): void {
+    this.setTutorialSeen(complete);
+  }
+
+  /**
    * Clear all stored data (for testing/reset)
    */
   clearAll(): void {

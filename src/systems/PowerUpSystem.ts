@@ -309,6 +309,11 @@ export class PowerUpSystem {
     // Activate power-up
     this.activatePowerUp(spawn.type, this.scene.time.now);
 
+    // TODO: Sound effect integration point
+    // GameScene should listen to 'powerup-collected' event and play sound
+    // Suggested sound: Sparkle/pickup sound (varies by power-up type)
+    // Example: this.audioManager.playSFX(`powerup_collect_${type}`)
+
     // Visual feedback (emit event for particle system)
     this.scene.events.emit('powerup-collected', {
       x: spawn.x,
@@ -330,6 +335,11 @@ export class PowerUpSystem {
       duration: config.duration,
       used: false,
     });
+
+    // TODO: Sound effect integration point
+    // GameScene should listen to 'powerup-activated' event and play sound
+    // Suggested sound: Woosh/activation sound (varies by power-up type)
+    // Example: this.audioManager.playSFX(`powerup_activate_${type}`)
 
     // Emit activation event
     this.scene.events.emit('powerup-activated', { type, config });
