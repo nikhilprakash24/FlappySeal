@@ -17,7 +17,8 @@ import { EndlessMode } from '../modes/EndlessMode';
 import { ChallengeMode } from '../modes/ChallengeMode';
 import { TimeTrialMode } from '../modes/TimeTrialMode';
 import { ZenMode } from '../modes/ZenMode';
-import { SEAL_CONFIG, UI_CONFIG, GAME_CONFIG, AUDIO_CONFIG } from '../config/constants';
+import { DebugManager } from '../managers/DebugManager';
+import { SEAL_CONFIG, UI_CONFIG, GAME_CONFIG, AUDIO_CONFIG, OBSTACLE_CONFIG } from '../config/constants';
 import { GameState } from '../types';
 
 export class GameScene extends Phaser.Scene {
@@ -29,6 +30,7 @@ export class GameScene extends Phaser.Scene {
   private audioManager?: AudioManager;
   private powerUpSystem?: PowerUpSystem;
   private gameMode?: GameMode;
+  private debugManager?: DebugManager;
   private modeUI: Phaser.GameObjects.GameObject[] = [];
   private gameState: GameState = GameState.PLAYING;
   private isGameStarted: boolean = false;
@@ -90,6 +92,10 @@ export class GameScene extends Phaser.Scene {
 
     // Initialize seal
     this.seal = new Seal(this, SEAL_CONFIG.START_X, SEAL_CONFIG.START_Y);
+
+    // Initialize debug manager for testing and tuning
+    this.debugManager = new DebugManager(this);
+    this.exposeDebugVariables();
 
     // Initialize obstacle manager (only if mode has obstacles)
     if (this.gameMode?.getRules().hasObstacles) {
@@ -164,6 +170,87 @@ export class GameScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
+  }
+
+  /**
+   * Expose variables to debug manager for real-time tuning
+   */
+  private exposeDebugVariables(): void {
+    if (!this.debugManager || !this.seal) return;
+
+    // Player Physics
+    this.debugManager.expose(
+      'Player Physics',
+      'Gravity',
+      'player.gravity',
+      () => this.seal!.getGravity(),
+      (val) => this.seal!.setGravity(val),
+      {
+        min: 0,
+        max: 3,
+        step: 0.1,
+        defaultValue: SEAL_CONFIG.GRAVITY,
+        unit: '',
+        description: 'Downward acceleration'
+      }
+    );
+
+    this.debugManager.expose(
+      'Player Physics',
+      'Swim Up Force',
+      'player.swimUpForce',
+      () => this.seal!.getSwimUpForce(),
+      (val) => this.seal!.setSwimUpForce(val),
+      {
+        min: 1,
+        max: 20,
+        step: 0.5,
+        defaultValue: Math.abs(SEAL_CONFIG.SWIM_UP_FORCE),
+        unit: '',
+        description: 'Upward velocity on swim up'
+      }
+    );
+
+    this.debugManager.expose(
+      'Player Physics',
+      'Dive Down Force',
+      'player.diveDownForce',
+      () => this.seal!.getDiveDownForce(),
+      (val) => this.seal!.setDiveDownForce(val),
+      {
+        min: 1,
+        max: 30,
+        step: 1,
+        defaultValue: SEAL_CONFIG.DIVE_DOWN_FORCE,
+        unit: '',
+        description: 'Downward velocity on dive'
+      }
+    );
+
+    this.debugManager.expose(
+      'Player Physics',
+      'Max Velocity',
+      'player.maxVelocity',
+      () => this.seal!.getMaxVelocity(),
+      (val) => this.seal!.setMaxVelocity(val),
+      {
+        min: 5,
+        max: 40,
+        step: 1,
+        defaultValue: SEAL_CONFIG.MAX_VELOCITY,
+        unit: '',
+        description: 'Terminal velocity cap'
+      }
+    );
+
+    // Obstacle Settings (expose when obstacle manager exists)
+    if (this.obstacleManager) {
+      // Note: ObstacleManager doesn't have getters/setters yet
+      // We'll add these in a future iteration
+      // For now, just expose the constants as read-only references
+    }
+
+    console.log('[GameScene] Debug variables exposed. Press D to toggle debug panel.');
   }
 
   /**
@@ -405,6 +492,12 @@ export class GameScene extends Phaser.Scene {
    * Main game loop
    */
   update(time: number, delta: number): void {
+    // Update debug manager (always, even when not playing)
+    if (this.debugManager) {
+      this.debugManager.update();
+      this.debugManager.render();
+    }
+
     if (this.gameState !== GameState.PLAYING || !this.seal) {
       return;
     }

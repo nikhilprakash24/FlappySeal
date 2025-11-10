@@ -22,6 +22,12 @@ export class Seal {
   private flipperDirection: number = 1;
   private skin: SealSkin;
 
+  // Physics parameters (exposed for debugging)
+  private gravity: number = SEAL_CONFIG.GRAVITY;
+  private swimUpForce: number = SEAL_CONFIG.SWIM_UP_FORCE;
+  private diveDownForce: number = SEAL_CONFIG.DIVE_DOWN_FORCE;
+  private maxVelocity: number = SEAL_CONFIG.MAX_VELOCITY;
+
   constructor(scene: Phaser.Scene, x: number, y: number, skinId: string = 'seal_default') {
     this.scene = scene;
     this.x = x;
@@ -91,14 +97,14 @@ export class Seal {
    * Apply upward force (swim up)
    */
   swimUp(): void {
-    this.velocity = SEAL_CONFIG.SWIM_UP_FORCE;
+    this.velocity = this.swimUpForce;
   }
 
   /**
    * Apply downward force (dive)
    */
   dive(): void {
-    this.velocity = SEAL_CONFIG.DIVE_DOWN_FORCE;
+    this.velocity = this.diveDownForce;
   }
 
   /**
@@ -106,10 +112,10 @@ export class Seal {
    */
   update(): void {
     // Apply gravity
-    this.velocity += SEAL_CONFIG.GRAVITY;
+    this.velocity += this.gravity;
 
     // Clamp velocity to max
-    this.velocity = clamp(this.velocity, -SEAL_CONFIG.MAX_VELOCITY, SEAL_CONFIG.MAX_VELOCITY);
+    this.velocity = clamp(this.velocity, -this.maxVelocity, this.maxVelocity);
 
     // Update position
     this.y += this.velocity;
@@ -187,5 +193,38 @@ export class Seal {
    */
   destroy(): void {
     this.graphics.destroy();
+  }
+
+  // Debug/Testing accessors for physics parameters
+  public getGravity(): number {
+    return this.gravity;
+  }
+
+  public setGravity(value: number): void {
+    this.gravity = value;
+  }
+
+  public getSwimUpForce(): number {
+    return Math.abs(this.swimUpForce); // Return as positive for UI
+  }
+
+  public setSwimUpForce(value: number): void {
+    this.swimUpForce = -Math.abs(value); // Store as negative (upward)
+  }
+
+  public getDiveDownForce(): number {
+    return this.diveDownForce;
+  }
+
+  public setDiveDownForce(value: number): void {
+    this.diveDownForce = value;
+  }
+
+  public getMaxVelocity(): number {
+    return this.maxVelocity;
+  }
+
+  public setMaxVelocity(value: number): void {
+    this.maxVelocity = value;
   }
 }
