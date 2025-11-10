@@ -10,7 +10,8 @@ import { ObstacleManager } from '../systems/ObstacleManager';
 import { ScoreManager } from '../systems/ScoreManager';
 import { ParticleManager } from '../systems/ParticleManager';
 import { BackgroundManager } from '../systems/BackgroundManager';
-import { SEAL_CONFIG, UI_CONFIG, GAME_CONFIG } from '../config/constants';
+import { AudioManager } from '../systems/AudioManager';
+import { SEAL_CONFIG, UI_CONFIG, GAME_CONFIG, AUDIO_CONFIG } from '../config/constants';
 import { GameState } from '../types';
 
 export class GameScene extends Phaser.Scene {
@@ -19,6 +20,7 @@ export class GameScene extends Phaser.Scene {
   private scoreManager?: ScoreManager;
   private particleManager?: ParticleManager;
   private backgroundManager?: BackgroundManager;
+  private audioManager?: AudioManager;
   private gameState: GameState = GameState.PLAYING;
   private isGameStarted: boolean = false;
 
@@ -37,6 +39,9 @@ export class GameScene extends Phaser.Scene {
 
     // Initialize particle manager
     this.particleManager = new ParticleManager(this);
+
+    // Initialize audio manager
+    this.audioManager = new AudioManager(this);
 
     // Initialize seal
     this.seal = new Seal(this, SEAL_CONFIG.START_X, SEAL_CONFIG.START_Y);
@@ -138,11 +143,13 @@ export class GameScene extends Phaser.Scene {
           this.seal.swimUp();
           this.particleManager.createSplash(this.seal.x, this.seal.y, true);
           this.particleManager.createBubbleStream(this.seal.x - 30, this.seal.y, 3);
+          this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.SWIM_UP);
         } else {
           // Right side: Dive down
           this.seal.dive();
           this.particleManager.createSplash(this.seal.x, this.seal.y, false);
           this.particleManager.createBubbleStream(this.seal.x - 30, this.seal.y, 3);
+          this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.DIVE_DOWN);
         }
       }
     });
@@ -183,6 +190,9 @@ export class GameScene extends Phaser.Scene {
 
     // Show score
     this.scoreManager?.show();
+
+    // Start music
+    this.audioManager?.playMusic();
   }
 
   /**
@@ -191,10 +201,18 @@ export class GameScene extends Phaser.Scene {
   private gameOver(): void {
     this.gameState = GameState.GAME_OVER;
 
+    // Play collision sound
+    this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.COLLISION);
+
     // Create collision explosion effect
     if (this.seal && this.particleManager) {
       this.particleManager.createExplosion(this.seal.x, this.seal.y);
     }
+
+    // Delayed game over sound
+    this.time.delayedCall(300, () => {
+      this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.GAME_OVER);
+    });
 
     // Game over text
     this.gameOverText = this.add.text(
@@ -332,6 +350,8 @@ export class GameScene extends Phaser.Scene {
         if (this.particleManager) {
           this.particleManager.createScorePop(this.seal.x, this.seal.y);
         }
+        // Play score sound
+        this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.SCORE);
       }
 
       // Update parallax background
@@ -364,6 +384,7 @@ export class GameScene extends Phaser.Scene {
     this.scoreManager?.destroy();
     this.particleManager?.destroy();
     this.backgroundManager?.destroy();
+    this.audioManager?.destroy();
     this.input.removeAllListeners();
   }
 }

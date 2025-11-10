@@ -7,15 +7,22 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "coverage": "vitest run --coverage"
   },
   "dependencies": {
     "phaser": "^3.80.1"
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
+    "@vitest/ui": "^4.0.8",
+    "happy-dom": "^20.0.10",
     "typescript": "^5.3.3",
-    "vite": "^5.0.12"
+    "vite": "^5.0.12",
+    "vitest": "^4.0.8"
   },
   "keywords": [
     "game",
