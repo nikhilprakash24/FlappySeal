@@ -19,6 +19,8 @@ import { TimeTrialMode } from '../modes/TimeTrialMode';
 import { ZenMode } from '../modes/ZenMode';
 import { SEAL_CONFIG, UI_CONFIG, GAME_CONFIG, AUDIO_CONFIG } from '../config/constants';
 import { GameState } from '../types';
+import { logger } from '../utils/logger';
+import { errorHandler, ErrorSeverity } from '../utils/errorHandler';
 
 export class GameScene extends Phaser.Scene {
   private seal?: Seal;
@@ -70,45 +72,69 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Initialize game mode from registry (or default to endless)
-    this.initializeGameMode();
+    try {
+      logger.info('GameScene initializing', undefined, 'GameScene');
 
-    // Initialize background manager (handles parallax and effects)
-    this.backgroundManager = new BackgroundManager(this);
+      // Initialize game mode from registry (or default to endless)
+      this.initializeGameMode();
 
-    // Initialize particle manager
-    this.particleManager = new ParticleManager(this);
+      // Initialize background manager (handles parallax and effects)
+      this.backgroundManager = new BackgroundManager(this);
 
-    // Initialize audio manager
-    this.audioManager = new AudioManager(this);
+      // Initialize particle manager
+      this.particleManager = new ParticleManager(this);
 
-    // Initialize power-up system (only if mode allows it)
-    if (this.gameMode?.getRules().hasPowerUps) {
-      this.powerUpSystem = new PowerUpSystem(this);
-      this.setupPowerUpEvents();
+      // Initialize audio manager
+      this.audioManager = new AudioManager(this);
+
+      // Initialize power-up system (only if mode allows it)
+      if (this.gameMode?.getRules().hasPowerUps) {
+        this.powerUpSystem = new PowerUpSystem(this);
+        this.setupPowerUpEvents();
+      }
+
+      // Initialize seal
+      this.seal = new Seal(this, SEAL_CONFIG.START_X, SEAL_CONFIG.START_Y);
+
+      // Initialize obstacle manager (only if mode has obstacles)
+      if (this.gameMode?.getRules().hasObstacles) {
+        this.obstacleManager = new ObstacleManager(this);
+      }
+
+      // Initialize score manager
+      this.scoreManager = new ScoreManager(this, (score) => {
+        // Update obstacle manager with current score for difficulty scaling
+        this.obstacleManager?.setScore(score);
+      });
+      this.scoreManager.createScoreDisplay();
+      this.scoreManager.hide(); // Hide until game starts
+
+      // Create start screen UI
+      this.createStartScreen();
+
+      // Setup controls
+      this.setupControls();
+
+      logger.info('GameScene initialized successfully', undefined, 'GameScene');
+    } catch (error) {
+      errorHandler.handleError(
+        'Failed to initialize GameScene',
+        ErrorSeverity.CRITICAL,
+        'GameScene',
+        error as Error
+      );
+      // Show error to user
+      this.add.text(
+        GAME_CONFIG.WIDTH / 2,
+        GAME_CONFIG.HEIGHT / 2,
+        'Failed to load game.\nPlease refresh the page.',
+        {
+          fontSize: '24px',
+          color: '#ff0000',
+          align: 'center',
+        }
+      ).setOrigin(0.5);
     }
-
-    // Initialize seal
-    this.seal = new Seal(this, SEAL_CONFIG.START_X, SEAL_CONFIG.START_Y);
-
-    // Initialize obstacle manager (only if mode has obstacles)
-    if (this.gameMode?.getRules().hasObstacles) {
-      this.obstacleManager = new ObstacleManager(this);
-    }
-
-    // Initialize score manager
-    this.scoreManager = new ScoreManager(this, (score) => {
-      // Update obstacle manager with current score for difficulty scaling
-      this.obstacleManager?.setScore(score);
-    });
-    this.scoreManager.createScoreDisplay();
-    this.scoreManager.hide(); // Hide until game starts
-
-    // Create start screen UI
-    this.createStartScreen();
-
-    // Setup controls
-    this.setupControls();
   }
 
 
@@ -413,6 +439,25 @@ export class GameScene extends Phaser.Scene {
     if (this.gameState !== GameState.PLAYING || !this.seal) {
       return;
     }
+
+    try {
+      this.gameUpdate(time, delta);
+    } catch (error) {
+      errorHandler.handleError(
+        'Critical error in game update loop',
+        ErrorSeverity.CRITICAL,
+        'GameScene',
+        error as Error
+      );
+      // Trigger game over to prevent infinite error loop
+      this.gameOver();
+    }
+  }
+
+  /**
+   * Core game update logic (separated for error handling)
+   */
+  private gameUpdate(time: number, delta: number): void {
 
     // Update game mode (important for time-based modes)
     if (this.gameMode) {

@@ -10,6 +10,8 @@ import { Obstacle } from '../entities/Obstacle';
 import { OBSTACLE_CONFIG, GAME_CONFIG, SCORE_CONFIG } from '../config/constants';
 import { ObstacleType } from '../types';
 import { randomInt, randomFloat } from '../utils/helpers';
+import { logger } from '../utils/logger';
+import { errorHandler, ErrorSeverity } from '../utils/errorHandler';
 
 export class ObstacleManager {
   private scene: Phaser.Scene;
@@ -72,66 +74,104 @@ export class ObstacleManager {
    * Spawn a new obstacle
    */
   private spawnObstacle(): void {
-    // Random gap position (avoid edges)
-    const minGapY = 100;
-    const maxGapY = GAME_CONFIG.HEIGHT - 100;
-    const gapY = randomInt(minGapY, maxGapY);
+    try {
+      // Random gap position (avoid edges)
+      const minGapY = 100;
+      const maxGapY = GAME_CONFIG.HEIGHT - 100;
+      const gapY = randomInt(minGapY, maxGapY);
 
-    // Random gap size
-    const gapSize = randomInt(OBSTACLE_CONFIG.MIN_GAP, OBSTACLE_CONFIG.MAX_GAP);
+      // Random gap size
+      const gapSize = randomInt(OBSTACLE_CONFIG.MIN_GAP, OBSTACLE_CONFIG.MAX_GAP);
 
-    // Random obstacle type
-    const type = Math.random() < OBSTACLE_CONFIG.CORAL_CHANCE
-      ? ObstacleType.CORAL
-      : ObstacleType.JELLYFISH;
+      // Validate gap values
+      if (gapSize < 50 || gapSize > 500) {
+        throw new Error(`Invalid gap size: ${gapSize}`);
+      }
 
-    // Spawn at right edge of screen
-    const x = GAME_CONFIG.WIDTH + 50;
+      // Random obstacle type
+      const type = Math.random() < OBSTACLE_CONFIG.CORAL_CHANCE
+        ? ObstacleType.CORAL
+        : ObstacleType.JELLYFISH;
 
-    const obstacle = this.getObstacle(x, gapY, gapSize, type);
-    this.obstacles.push(obstacle);
+      // Spawn at right edge of screen
+      const x = GAME_CONFIG.WIDTH + 50;
+
+      const obstacle = this.getObstacle(x, gapY, gapSize, type);
+      this.obstacles.push(obstacle);
+
+      logger.debug('Obstacle spawned', { x, gapY, gapSize, type }, 'ObstacleManager');
+    } catch (error) {
+      errorHandler.handleError(
+        'Failed to spawn obstacle',
+        ErrorSeverity.MEDIUM,
+        'ObstacleManager',
+        error as Error
+      );
+      // Continue without spawning - game can proceed
+    }
   }
 
   /**
    * Update all obstacles
    */
   update(time: number, sealX: number): number {
-    let pointsEarned = 0;
+    try {
+      let pointsEarned = 0;
 
-    // Update scroll speed based on score (difficulty progression)
-    this.updateScrollSpeed();
+      // Update scroll speed based on score (difficulty progression)
+      this.updateScrollSpeed();
 
-    // Initialize lastSpawnTime on first update to prevent immediate spawning
-    if (this.lastSpawnTime === 0) {
-      this.lastSpawnTime = time;
-    }
-
-    // Spawn new obstacles
-    if (time - this.lastSpawnTime > OBSTACLE_CONFIG.SPAWN_INTERVAL) {
-      this.spawnObstacle();
-      this.lastSpawnTime = time;
-    }
-
-    // Update existing obstacles
-    for (let i = this.obstacles.length - 1; i >= 0; i--) {
-      const obstacle = this.obstacles[i];
-
-      // Update position
-      obstacle.update(this.scrollSpeed);
-
-      // Check if passed by seal
-      if (obstacle.hasPassed(sealX)) {
-        pointsEarned += SCORE_CONFIG.POINTS_PER_OBSTACLE;
+      // Initialize lastSpawnTime on first update to prevent immediate spawning
+      if (this.lastSpawnTime === 0) {
+        this.lastSpawnTime = time;
       }
 
-      // Remove if off-screen
-      if (obstacle.isOffScreen()) {
-        this.obstacles.splice(i, 1);
-        this.returnToPool(obstacle);
+      // Spawn new obstacles
+      if (time - this.lastSpawnTime > OBSTACLE_CONFIG.SPAWN_INTERVAL) {
+        this.spawnObstacle();
+        this.lastSpawnTime = time;
       }
-    }
 
-    return pointsEarned;
+      // Update existing obstacles
+      for (let i = this.obstacles.length - 1; i >= 0; i--) {
+        const obstacle = this.obstacles[i];
+
+        try {
+          // Update position
+          obstacle.update(this.scrollSpeed);
+
+          // Check if passed by seal
+          if (obstacle.hasPassed(sealX)) {
+            pointsEarned += SCORE_CONFIG.POINTS_PER_OBSTACLE;
+          }
+
+          // Remove if off-screen
+          if (obstacle.isOffScreen()) {
+            this.obstacles.splice(i, 1);
+            this.returnToPool(obstacle);
+          }
+        } catch (error) {
+          // If single obstacle fails, remove it and continue
+          logger.warn('Obstacle update failed, removing', error, 'ObstacleManager');
+          this.obstacles.splice(i, 1);
+          try {
+            this.returnToPool(obstacle);
+          } catch {
+            // If can't return to pool, just remove
+          }
+        }
+      }
+
+      return pointsEarned;
+    } catch (error) {
+      errorHandler.handleError(
+        'ObstacleManager update failed',
+        ErrorSeverity.HIGH,
+        'ObstacleManager',
+        error as Error
+      );
+      return 0; // Return 0 points on error
+    }
   }
 
   /**
