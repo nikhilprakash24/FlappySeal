@@ -42,6 +42,11 @@ export class Seal {
     // Set position and rotation of graphics object
     this.graphics.setPosition(this.x, this.y);
     this.graphics.setRotation(Phaser.Math.DegToRad(this.rotation));
+    this.graphics.setDepth(50); // Ensure seal is always on top
+
+    // NEW: Glow effect for better visibility
+    this.graphics.fillStyle(0xffffff, 0.2);
+    this.graphics.fillEllipse(0, 0, this.skin.size.width + 10, this.skin.size.height + 10);
 
     // Draw seal relative to (0, 0) since position is set above
     // Seal body (using skin color)
@@ -108,21 +113,25 @@ export class Seal {
     // Apply gravity
     this.velocity += SEAL_CONFIG.GRAVITY;
 
+    // Apply drag (air resistance) - NEW!
+    this.velocity *= SEAL_CONFIG.DRAG;
+
     // Clamp velocity to max
     this.velocity = clamp(this.velocity, -SEAL_CONFIG.MAX_VELOCITY, SEAL_CONFIG.MAX_VELOCITY);
 
     // Update position
     this.y += this.velocity;
 
-    // Update rotation based on velocity
+    // Update rotation based on velocity (IMPROVED: smoother)
     this.rotation = clamp(
       this.velocity * SEAL_CONFIG.ROTATION_SPEED,
       -SEAL_CONFIG.MAX_ROTATION,
       SEAL_CONFIG.MAX_ROTATION
     );
 
-    // Animate flippers
-    this.flipperOffset += this.flipperDirection * 0.5;
+    // Animate flippers (IMPROVED: speed based on velocity)
+    const flipperSpeed = 0.3 + Math.abs(this.velocity) * 0.05;
+    this.flipperOffset += this.flipperDirection * flipperSpeed;
     if (this.flipperOffset > 3 || this.flipperOffset < -3) {
       this.flipperDirection *= -1;
     }

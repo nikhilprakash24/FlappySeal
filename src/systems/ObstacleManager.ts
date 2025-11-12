@@ -20,6 +20,7 @@ export class ObstacleManager {
   private lastSpawnTime: number = 0;
   private scrollSpeed: number = OBSTACLE_CONFIG.SCROLL_SPEED;
   private score: number = 0;
+  private obstaclesPassed: number = 0; // NEW: Track obstacles for difficulty progression
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -71,6 +72,27 @@ export class ObstacleManager {
   }
 
   /**
+   * Calculate gap size based on progression (IMPROVED: Progressive difficulty)
+   */
+  private calculateGapSize(): number {
+    // Start with very easy gaps, gradually reduce
+    if (this.obstaclesPassed < SCORE_CONFIG.GRACE_PERIOD_OBSTACLES) {
+      // First few obstacles are extra easy
+      return OBSTACLE_CONFIG.STARTING_GAP;
+    }
+
+    // Gradually reduce gap size as player progresses
+    const reduction = this.obstaclesPassed * OBSTACLE_CONFIG.GAP_REDUCTION_RATE;
+    const targetGap = OBSTACLE_CONFIG.STARTING_GAP - reduction;
+
+    // Clamp between MIN and MAX
+    return Math.max(
+      OBSTACLE_CONFIG.MIN_GAP,
+      Math.min(OBSTACLE_CONFIG.MAX_GAP, targetGap)
+    );
+  }
+
+  /**
    * Spawn a new obstacle
    */
   private spawnObstacle(): void {
@@ -80,8 +102,8 @@ export class ObstacleManager {
       const maxGapY = GAME_CONFIG.HEIGHT - 100;
       const gapY = randomInt(minGapY, maxGapY);
 
-      // Random gap size
-      const gapSize = randomInt(OBSTACLE_CONFIG.MIN_GAP, OBSTACLE_CONFIG.MAX_GAP);
+      // Progressive gap size (starts easy, gets harder)
+      const gapSize = this.calculateGapSize();
 
       // Validate gap values
       if (gapSize < 50 || gapSize > 500) {
@@ -99,7 +121,7 @@ export class ObstacleManager {
       const obstacle = this.getObstacle(x, gapY, gapSize, type);
       this.obstacles.push(obstacle);
 
-      logger.debug('Obstacle spawned', { x, gapY, gapSize, type }, 'ObstacleManager');
+      logger.debug('Obstacle spawned', { x, gapY, gapSize, type, obstaclesPassed: this.obstaclesPassed }, 'ObstacleManager');
     } catch (error) {
       errorHandler.handleError(
         'Failed to spawn obstacle',
@@ -143,6 +165,7 @@ export class ObstacleManager {
           // Check if passed by seal
           if (obstacle.hasPassed(sealX)) {
             pointsEarned += SCORE_CONFIG.POINTS_PER_OBSTACLE;
+            this.obstaclesPassed++; // Track for difficulty progression
           }
 
           // Remove if off-screen
@@ -175,16 +198,20 @@ export class ObstacleManager {
   }
 
   /**
-   * Update scroll speed based on score
+   * Update scroll speed based on score (IMPROVED: Smooth progression with limits)
    */
   private updateScrollSpeed(): void {
     const speedIncrease =
       Math.floor(this.score / SCORE_CONFIG.SPEED_INCREASE_INTERVAL) *
       SCORE_CONFIG.SPEED_INCREASE_AMOUNT;
 
-    this.scrollSpeed = Math.min(
-      OBSTACLE_CONFIG.SCROLL_SPEED + speedIncrease,
-      SCORE_CONFIG.MAX_SPEED
+    // Apply min/max limits from OBSTACLE_CONFIG
+    this.scrollSpeed = Math.max(
+      OBSTACLE_CONFIG.MIN_SCROLL_SPEED,
+      Math.min(
+        OBSTACLE_CONFIG.MAX_SCROLL_SPEED,
+        OBSTACLE_CONFIG.SCROLL_SPEED + speedIncrease
+      )
     );
   }
 
@@ -269,6 +296,7 @@ export class ObstacleManager {
     this.lastSpawnTime = 0;
     this.scrollSpeed = OBSTACLE_CONFIG.SCROLL_SPEED;
     this.score = 0;
+    this.obstaclesPassed = 0; // Reset difficulty progression
   }
 
   /**

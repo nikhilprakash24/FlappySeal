@@ -227,6 +227,13 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
+    // ESC key for pause
+    this.input.keyboard?.on('keydown-ESC', () => {
+      if (this.gameState === GameState.PLAYING) {
+        this.togglePause();
+      }
+    });
+
     // Keyboard controls
     this.input.keyboard?.on('keydown-UP', () => {
       if (!this.isGameStarted) {
@@ -548,6 +555,44 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Toggle pause state
+   */
+  private togglePause(): void {
+    if (this.gameState === GameState.PLAYING) {
+      this.gameState = GameState.PAUSED;
+      this.scene.pause();
+
+      // Show pause UI
+      const pauseOverlay = this.add.graphics().setDepth(200);
+      pauseOverlay.fillStyle(0x000000, 0.7);
+      pauseOverlay.fillRect(0, 0, GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
+      (pauseOverlay as any).name = 'pauseOverlay';
+
+      const pauseText = this.add.text(
+        GAME_CONFIG.WIDTH / 2,
+        GAME_CONFIG.HEIGHT / 2,
+        'PAUSED\n\nPress ESC to Resume',
+        {
+          fontSize: '48px',
+          color: '#ffffff',
+          fontStyle: 'bold',
+          align: 'center',
+        }
+      ).setOrigin(0.5).setDepth(201);
+      (pauseText as any).name = 'pauseText';
+    } else if (this.gameState === GameState.PAUSED) {
+      this.gameState = GameState.PLAYING;
+      this.scene.resume();
+
+      // Remove pause UI
+      const pauseOverlay = this.children.getByName('pauseOverlay');
+      const pauseText = this.children.getByName('pauseText');
+      pauseOverlay?.destroy();
+      pauseText?.destroy();
+    }
+  }
+
+  /**
    * Core game update logic (separated for error handling)
    */
   private gameUpdate(time: number, delta: number): void {
@@ -676,6 +721,10 @@ export class GameScene extends Phaser.Scene {
 
       return; // Survive the collision
     }
+
+    // IMPROVED: More dramatic collision feedback
+    this.cameras.main.shake(400, 0.015); // Stronger shake
+    this.cameras.main.flash(200, 255, 0, 0); // Red flash
 
     // No shield - game over
     this.gameOver();
