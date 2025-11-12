@@ -171,9 +171,9 @@ export class GameScene extends Phaser.Scene {
     this.instructionText = this.add.text(
       GAME_CONFIG.WIDTH / 2,
       GAME_CONFIG.HEIGHT - 100,
-      'Left Click: Swim Up | Right Click: Dive Down\n\nClick to Start!',
+      '⬆ UP Arrow / W = Swim Up  |  ⬇ DOWN Arrow / S = Dive Down\nor Left Click = Up  |  Right Click = Down\n\nPress Any Key or Click to Start!',
       {
-        fontSize: '20px',
+        fontSize: '18px',
         color: UI_CONFIG.COLORS.PRIMARY,
         stroke: UI_CONFIG.COLORS.BACKGROUND,
         strokeThickness: 4,
@@ -229,14 +229,24 @@ export class GameScene extends Phaser.Scene {
 
     // Keyboard controls
     this.input.keyboard?.on('keydown-UP', () => {
-      if (this.gameState === GameState.PLAYING && this.seal) {
+      if (!this.isGameStarted) {
+        this.startGame();
+        return;
+      }
+      if (this.gameState === GameState.PLAYING && this.seal && this.particleManager) {
         this.seal.swimUp();
+        this.particleManager.createSplash(this.seal.x, this.seal.y, true);
+        this.particleManager.createBubbleStream(this.seal.x - 30, this.seal.y, 3);
+        this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.SWIM_UP);
       }
     });
 
     this.input.keyboard?.on('keydown-DOWN', () => {
-      if (this.gameState === GameState.PLAYING && this.seal) {
+      if (this.gameState === GameState.PLAYING && this.seal && this.particleManager) {
         this.seal.dive();
+        this.particleManager.createSplash(this.seal.x, this.seal.y, false);
+        this.particleManager.createBubbleStream(this.seal.x - 30, this.seal.y, 3);
+        this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.DIVE_DOWN);
       }
     });
 
@@ -245,6 +255,29 @@ export class GameScene extends Phaser.Scene {
         this.startGame();
       } else if (this.gameState === GameState.GAME_OVER) {
         this.restartGame();
+      }
+    });
+
+    // W/S keys as alternatives
+    this.input.keyboard?.on('keydown-W', () => {
+      if (!this.isGameStarted) {
+        this.startGame();
+        return;
+      }
+      if (this.gameState === GameState.PLAYING && this.seal && this.particleManager) {
+        this.seal.swimUp();
+        this.particleManager.createSplash(this.seal.x, this.seal.y, true);
+        this.particleManager.createBubbleStream(this.seal.x - 30, this.seal.y, 3);
+        this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.SWIM_UP);
+      }
+    });
+
+    this.input.keyboard?.on('keydown-S', () => {
+      if (this.gameState === GameState.PLAYING && this.seal && this.particleManager) {
+        this.seal.dive();
+        this.particleManager.createSplash(this.seal.x, this.seal.y, false);
+        this.particleManager.createBubbleStream(this.seal.x - 30, this.seal.y, 3);
+        this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.DIVE_DOWN);
       }
     });
   }
@@ -386,27 +419,87 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Restart instruction
-    const restartText = this.add.text(
-      GAME_CONFIG.WIDTH / 2,
-      GAME_CONFIG.HEIGHT - 80,
-      'Click to Restart',
-      {
-        fontSize: '20px',
-        color: UI_CONFIG.COLORS.SECONDARY,
-        stroke: UI_CONFIG.COLORS.BACKGROUND,
-        strokeThickness: 4,
-      }
-    ).setOrigin(0.5).setDepth(100);
+    // Restart button (visual button, not just text)
+    const buttonWidth = 200;
+    const buttonHeight = 50;
+    const buttonX = GAME_CONFIG.WIDTH / 2;
+    const buttonY = GAME_CONFIG.HEIGHT - 100;
 
+    const buttonContainer = this.add.container(buttonX, buttonY).setDepth(100);
+
+    const buttonBg = this.add.graphics();
+    buttonBg.fillStyle(0x44ff44, 1);
+    buttonBg.fillRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
+    buttonBg.lineStyle(3, 0xffffff, 1);
+    buttonBg.strokeRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
+
+    const buttonText = this.add.text(0, 0, '↻ Restart', {
+      fontSize: '24px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      fontFamily: 'Arial',
+    }).setOrigin(0.5);
+
+    buttonContainer.add([buttonBg, buttonText]);
+    buttonContainer.setSize(buttonWidth, buttonHeight);
+    buttonContainer.setInteractive({ useHandCursor: true });
+
+    // Hover effects
+    buttonContainer.on('pointerover', () => {
+      buttonBg.clear();
+      buttonBg.fillStyle(0x55ff55, 1);
+      buttonBg.fillRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
+      buttonBg.lineStyle(4, 0xffff00, 1);
+      buttonBg.strokeRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
+      this.tweens.add({
+        targets: buttonContainer,
+        scaleX: 1.1,
+        scaleY: 1.1,
+        duration: 100,
+      });
+    });
+
+    buttonContainer.on('pointerout', () => {
+      buttonBg.clear();
+      buttonBg.fillStyle(0x44ff44, 1);
+      buttonBg.fillRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
+      buttonBg.lineStyle(3, 0xffffff, 1);
+      buttonBg.strokeRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
+      this.tweens.add({
+        targets: buttonContainer,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 100,
+      });
+    });
+
+    buttonContainer.on('pointerdown', () => {
+      this.cameras.main.shake(100, 0.01);
+      this.restartGame();
+    });
+
+    // Pulse animation
     this.tweens.add({
-      targets: restartText,
-      alpha: 0.5,
+      targets: buttonContainer,
+      scaleX: 1.05,
+      scaleY: 1.05,
       duration: 800,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
+
+    // Also show keyboard hint
+    const hintText = this.add.text(
+      GAME_CONFIG.WIDTH / 2,
+      GAME_CONFIG.HEIGHT - 40,
+      'Press SPACE or Click Button',
+      {
+        fontSize: '16px',
+        color: '#aaaaaa',
+        fontFamily: 'Arial',
+      }
+    ).setOrigin(0.5).setDepth(100);
   }
 
   /**
