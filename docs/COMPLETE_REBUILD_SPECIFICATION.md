@@ -1,0 +1,1161 @@
+# FlappySeal: Complete Rebuild Specification & Technical Blueprint
+**Version:** 1.0.0 | **Platform:** Mobile (iOS/Android) | **Status:** Can rebuild from this doc alone
+
+---
+
+## PART 1: PROJECT FOUNDATION & ARCHITECTURE
+
+### Executive Summary
+FlappySeal is a mobile-first Flappy Bird-inspired endless runner with THREE playable marine animals (Seal, Otter, Sea Lion), each with statistically distinct physics (35% variance), dual-control scheme (swim up + dive down), interactive tutorial system, real-time debug panel, and config-driven architecture. Built with Phaser 3 + TypeScript, deployed via Capacitor to iOS/Android. NO web version. Designed for portrait orientation, one-handed play, accessible physics (gravity 0.5 vs Flappy Bird's realistic 9.8 m/s²).
+
+### Core Design Principles
+1. **Config-Driven Everything:** Zero hard-coded game values. All physics, visuals, stats defined in `characters.ts` CharacterConfig objects.
+2. **Composition Over Inheritance:** Character base class + injected config objects, NOT subclass overrides.
+3. **Instant Velocity Model:** Like original Flappy Bird, input SETS velocity (not additive force). `velocity = swimUpForce` not `velocity += force`.
+4. **Programmatic Graphics:** Phaser Graphics API draws shapes procedurally. NO sprite sheets (yet). 3 body shapes: Round (Seal), Sleek (Otter), Bulky (Sea Lion).
+5. **Mobile-First UX:** Touch zones (left 50% = up, right 50% = down), portrait lock, safe area insets, no web fallback.
+6. **Debug for Balance:** Press D to expose physics sliders, save/load configs, tune in real-time. Secret unlock in production (tap version 7x).
+
+### Technology Stack
+```yaml
+Frontend:
+  Engine: Phaser 3.60+ (Canvas renderer, Matter.js physics disabled - custom physics)
+  Language: TypeScript 5.0+ (strict mode, ES2020 target)
+  Build: Vite 5.0+ (fast HMR, tree-shaking)
+
+Mobile Wrapper:
+  Framework: Capacitor 5+ (NOT Cordova, NOT React Native)
+  iOS: Swift bridge, Xcode 15+, iOS 13+ deployment target
+  Android: Kotlin bridge, Android Studio, minSdk 22, targetSdk 34
+
+State Management:
+  Scenes: Phaser Scene system (MenuScene, CharacterSelectScene, GameScene, etc.)
+  Cross-Scene: Phaser Registry (e.g., registry.set('characterType', CharacterType.OTTER))
+  Persistence: localStorage wrapper (high scores, tutorial completion, character selection)
+
+Analytics:
+  Firebase Analytics (event tracking: game_start, game_over, character_selected)
+  Firebase Crashlytics (crash reporting, error logs)
+
+Audio:
+  Phaser Sound Manager (web audio API)
+  Capacitor NativeAudio plugin (if autoplay issues on mobile)
+```
+
+### Project Structure (Mandatory)
+```
+FlappySeal/
+├── src/
+│   ├── config/
+│   │   ├── constants.ts          // GAME_CONFIG, UI_CONFIG, AUDIO_CONFIG, SEAL_CONFIG
+│   │   └── characters.ts         // CharacterConfig interface + 3 configs (Seal, Otter, SeaLion)
+│   ├── entities/
+│   │   ├── Character.ts          // Base class (540 lines) - physics, rendering, debug accessors
+│   │   ├── Seal.ts               // Extends Character, passes SEAL_CHARACTER_CONFIG (24 lines)
+│   │   ├── Otter.ts              // Extends Character, passes OTTER_CHARACTER_CONFIG (30 lines)
+│   │   └── SeaLion.ts            // Extends Character, passes SEALION_CHARACTER_CONFIG (30 lines)
+│   ├── scenes/
+│   │   ├── MenuScene.ts          // Main menu, mode selection button
+│   │   ├── CharacterSelectScene.ts // Character cards, stat bars, unlock UI (550 lines)
+│   │   ├── ModeSelectionScene.ts // 4 mode buttons (Endless, Challenge, Time Trial, Zen)
+│   │   └── GameScene.ts          // Core gameplay loop (700+ lines)
+│   ├── systems/
+│   │   ├── ObstacleManager.ts    // Procedural pipe generation, collision checks
+│   │   ├── ScoreManager.ts       // Score display, high score persistence, sound events
+│   │   ├── ParticleManager.ts    // Splash, bubbles, explosions
+│   │   ├── BackgroundManager.ts  // Parallax ocean layers
+│   │   ├── AudioManager.ts       // Sound playback, volume controls
+│   │   ├── PowerUpSystem.ts      // 8 power-up types (shield, magnet, etc.)
+│   │   └── TutorialOverlay.ts    // 5-step interactive tutorial (540 lines)
+│   ├── managers/
+│   │   └── DebugManager.ts       // Real-time physics editor (670 lines)
+│   ├── modes/
+│   │   ├── EndlessMode.ts        // Classic Flappy Bird mode
+│   │   ├── ChallengeMode.ts      // Objective-based (e.g., "Score 50 with Otter")
+│   │   ├── TimeTrialMode.ts      // 60-second time limit
+│   │   └── ZenMode.ts            // No obstacles, practice mode
+│   ├── ui/
+│   │   └── UIComponents.ts       // Reusable components (UIButton, UIPanel, UIStatBar, etc.)
+│   └── utils/
+│       ├── storage.ts            // localStorage wrapper singleton
+│       └── helpers.ts            // Utility functions (clamp, formatNumber, etc.)
+├── public/
+│   └── assets/
+│       └── audio/                // MP3 sound files (27 total when complete)
+├── ios/                          // Generated by Capacitor
+├── android/                      // Generated by Capacitor
+├── capacitor.config.ts           // Capacitor configuration
+├── tsconfig.json                 // TypeScript strict mode config
+├── vite.config.ts                // Vite build config
+└── package.json
+```
+
+---
+
+## PART 2: CORE GAME MECHANICS & PHYSICS
+
+### Physics Model (Critical - Matches Flappy Bird)
+```typescript
+// Character.ts - Update loop (runs every frame at 60 FPS)
+update(time: number, delta: number): void {
+  // Step 1: Apply gravity (continuous acceleration downward)
+  this.velocity += this.gravity;  // e.g., velocity += 0.5
+
+  // Step 2: Clamp to terminal velocity (prevents infinite acceleration)
+  this.velocity = clamp(this.velocity, -this.maxVelocity, this.maxVelocity);
+  // clamp(value, min, max) = Math.max(min, Math.min(max, value))
+
+  // Step 3: Update position based on velocity
+  this.y += this.velocity;  // Move character vertically
+
+  // Step 4: Calculate visual rotation (tilt based on velocity)
+  this.rotation = clamp(
+    this.velocity * this.config.physics.rotationSpeed,  // e.g., velocity * 2
+    -this.config.physics.maxRotation,                   // e.g., -30 degrees
+    this.config.physics.maxRotation                     // e.g., +30 degrees
+  );
+
+  // Step 5: Animate flippers (cosmetic, doesn't affect physics)
+  this.animateFlippers();  // Oscillates flipper offset -3 to +3
+
+  // Step 6: Redraw character at new position/rotation
+  this.draw();
+}
+
+// Input handling (INSTANT velocity assignment, NOT additive)
+swimUp(): void {
+  this.velocity = this.swimUpForce;  // e.g., velocity = -8 (negative = up)
+  // NOT: this.velocity += this.swimUpForce (that would be wrong!)
+
+  // Sound event (TODO: uncomment when audio ready)
+  // this.scene.events.emit('character:swim', this.config.type);
+}
+
+dive(): void {
+  this.velocity = this.diveDownForce;  // e.g., velocity = +12 (positive = down)
+
+  // Sound event (TODO: uncomment when audio ready)
+  // this.scene.events.emit('character:dive', this.config.type);
+}
+```
+
+**Why This Works (Flappy Bird Insight):**
+- Flappy Bird's genius is INSTANT velocity reset, not physics acceleration
+- Tapping feels responsive because velocity changes immediately
+- Gravity is constant (not exponential) for predictable arc
+- Our gravity (0.5) is MUCH lower than Flappy Bird's (~9.8 m/s² scaled) for accessibility
+
+### Character Configuration System (THE MOST IMPORTANT PART)
+```typescript
+// In src/config/characters.ts
+
+export enum CharacterType {
+  SEAL = 'seal',
+  OTTER = 'otter',
+  SEALION = 'sealion',
+}
+
+export enum BodyShape {
+  ROUND = 'round',    // Seal - circular, classic
+  SLEEK = 'sleek',    // Otter - elongated 2:1 ratio
+  BULKY = 'bulky',    // Sea Lion - wide, barrel-shaped
+}
+
+export interface CharacterConfig {
+  // Identity
+  id: string;                    // 'seal', 'otter', 'sealion' (matches CharacterType)
+  name: string;                  // Display name: "Harbor Seal", "River Otter", "California Sea Lion"
+  type: CharacterType;
+  description: string;           // For UI: "Balanced and friendly"
+
+  // Stats (100 = baseline, used for UI display)
+  stats: {
+    weight: number;              // 100 (Seal), 65 (Otter -35%), 135 (Sea Lion +35%)
+    power: number;               // 100 (Seal), 65 (Otter -35%), 135 (Sea Lion +35%)
+    agility: number;             // 100 (Seal), 130 (Otter +30%), 75 (Sea Lion -25%)
+  };
+
+  // Physical dimensions
+  size: {
+    width: number;               // Collision width in pixels (60 for Seal)
+    height: number;              // Collision height in pixels (35 for Seal)
+    renderScale: number;         // Visual size multiplier (1.0 = normal)
+  };
+
+  // Physics parameters (THESE CONTROL GAMEPLAY FEEL)
+  physics: {
+    gravity: number;             // Downward accel per frame: 0.5 (Seal), 0.33 (Otter), 0.68 (Sea Lion)
+    swimUpForce: number;         // Upward velocity on tap: -8 (Seal), -5.2 (Otter), -10.8 (Sea Lion)
+    diveDownForce: number;       // Downward velocity on tap: 12 (Seal), 7.8 (Otter), 16.2 (Sea Lion)
+    maxVelocityY: number;        // Terminal velocity: 15 (Seal), 12 (Otter), 18 (Sea Lion)
+    drag: number;                // Velocity damping per frame: 0.98 (2% loss per frame)
+    rotationSpeed: number;       // Tilt multiplier: 2 (degrees per velocity unit)
+    maxRotation: number;         // Max tilt angle: 30 degrees
+  };
+
+  // Visual appearance
+  visuals: {
+    bodyColor: number;           // Hex color: 0x3a3a3a (gray), 0x8b4513 (brown), 0x4a3020 (dark brown)
+    bellyColor?: number;         // Optional lighter belly color
+    flipperColor: number;        // Appendage color (darker shade of body)
+    eyeColor: number;            // 0xffffff (white)
+    noseColor: number;           // 0x000000 (black)
+    bodyShape: BodyShape;        // ROUND | SLEEK | BULKY (determines draw method)
+    features: {
+      hasEarFlaps: boolean;      // Sea lions have external ears (visual feature)
+      whiskerLength: 'short' | 'medium' | 'long' | 'thick';
+      tailStyle: 'flipper' | 'tapered' | 'thick_flipper';
+    };
+  };
+
+  // Gameplay properties
+  gameplay: {
+    difficulty: 'easy' | 'medium' | 'hard';  // For UI badges
+    hitboxScale: number;                      // Collision box size: 1.0 (Seal), 0.85 (Otter), 1.15 (Sea Lion)
+    unlockCondition?: {                       // Undefined = always unlocked (Seal)
+      type: 'score' | 'achievement';
+      value: number | string;                 // 500 (Otter), 1000 (Sea Lion)
+    };
+  };
+}
+
+// SEAL: Baseline character (always unlocked)
+export const SEAL_CHARACTER_CONFIG: CharacterConfig = {
+  id: 'seal',
+  name: 'Harbor Seal',
+  type: CharacterType.SEAL,
+  description: 'Balanced and friendly - perfect for beginners',
+  stats: { weight: 100, power: 100, agility: 100 },
+  size: { width: 60, height: 35, renderScale: 1.0 },
+  physics: {
+    gravity: 0.5,           // Standard gravity
+    swimUpForce: -8,        // Negative = upward
+    diveDownForce: 12,      // Positive = downward
+    maxVelocityY: 15,
+    drag: 0.98,
+    rotationSpeed: 2,
+    maxRotation: 30,
+  },
+  visuals: {
+    bodyColor: 0x3a3a3a,    // Gray
+    flipperColor: 0x2a2a2a, // Dark gray
+    eyeColor: 0xffffff,
+    noseColor: 0x000000,
+    bodyShape: BodyShape.ROUND,
+    features: { hasEarFlaps: false, whiskerLength: 'medium', tailStyle: 'flipper' },
+  },
+  gameplay: {
+    difficulty: 'medium',
+    hitboxScale: 1.0,       // Exact size collision
+    // No unlockCondition = always available
+  },
+};
+
+// OTTER: Light/agile character (hard mode)
+export const OTTER_CHARACTER_CONFIG: CharacterConfig = {
+  id: 'otter',
+  name: 'River Otter',
+  type: CharacterType.OTTER,
+  description: 'Light and agile - high skill ceiling',
+  stats: { weight: 65, power: 65, agility: 130 },  // -35% weight/power, +30% agility
+  size: { width: 55, height: 30, renderScale: 0.9 },
+  physics: {
+    gravity: 0.33,          // 35% lighter (0.5 * 0.65)
+    swimUpForce: -5.2,      // 35% weaker (8 * 0.65)
+    diveDownForce: 7.8,     // 35% weaker (12 * 0.65)
+    maxVelocityY: 12,       // 20% slower terminal velocity
+    drag: 0.98,
+    rotationSpeed: 2,
+    maxRotation: 30,
+  },
+  visuals: {
+    bodyColor: 0x8b4513,    // Brown
+    bellyColor: 0xd2b48c,   // Tan belly
+    flipperColor: 0x654321,
+    eyeColor: 0xffffff,
+    noseColor: 0x000000,
+    bodyShape: BodyShape.SLEEK,  // Elongated body
+    features: { hasEarFlaps: false, whiskerLength: 'long', tailStyle: 'tapered' },
+  },
+  gameplay: {
+    difficulty: 'hard',
+    hitboxScale: 0.85,      // 15% smaller collision box (more forgiving)
+    unlockCondition: { type: 'score', value: 500 },
+  },
+};
+
+// SEA LION: Heavy/powerful character (easy mode)
+export const SEALION_CHARACTER_CONFIG: CharacterConfig = {
+  id: 'sealion',
+  name: 'California Sea Lion',
+  type: CharacterType.SEALION,
+  description: 'Heavy and powerful - forgiving for beginners',
+  stats: { weight: 135, power: 135, agility: 75 },  // +35% weight/power, -25% agility
+  size: { width: 70, height: 40, renderScale: 1.15 },
+  physics: {
+    gravity: 0.68,          // 35% heavier (0.5 * 1.35)
+    swimUpForce: -10.8,     // 35% stronger (8 * 1.35)
+    diveDownForce: 16.2,    // 35% stronger (12 * 1.35)
+    maxVelocityY: 18,       // 20% faster terminal velocity
+    drag: 0.98,
+    rotationSpeed: 2,
+    maxRotation: 30,
+  },
+  visuals: {
+    bodyColor: 0x4a3020,    // Dark brown
+    bellyColor: 0x6b4423,   // Lighter brown belly
+    flipperColor: 0x3a2010,
+    eyeColor: 0xffffff,
+    noseColor: 0x000000,
+    bodyShape: BodyShape.BULKY,  // Wide, barrel-shaped
+    features: { hasEarFlaps: true, whiskerLength: 'thick', tailStyle: 'thick_flipper' },
+  },
+  gameplay: {
+    difficulty: 'easy',
+    hitboxScale: 1.15,      // 15% larger collision box (less forgiving but more power)
+    unlockCondition: { type: 'score', value: 1000 },
+  },
+};
+
+// Helper function to get config by type
+export function getCharacterConfig(type: CharacterType): CharacterConfig {
+  switch (type) {
+    case CharacterType.OTTER: return OTTER_CHARACTER_CONFIG;
+    case CharacterType.SEALION: return SEALION_CHARACTER_CONFIG;
+    default: return SEAL_CHARACTER_CONFIG;
+  }
+}
+
+// Helper to check if character is unlocked
+export function isCharacterUnlocked(characterId: string, playerScore: number): boolean {
+  const config = getCharacterConfig(characterId as CharacterType);
+  if (!config.gameplay.unlockCondition) return true;  // Always unlocked (Seal)
+  if (config.gameplay.unlockCondition.type === 'score') {
+    return playerScore >= (config.gameplay.unlockCondition.value as number);
+  }
+  return false;
+}
+```
+
+### Character Class Implementation
+```typescript
+// src/entities/Character.ts (Base class - 540 lines total)
+
+import Phaser from 'phaser';
+import { CharacterConfig, BodyShape } from '../config/characters';
+import { clamp } from '../utils/helpers';
+
+export class Character {
+  protected scene: Phaser.Scene;
+  protected graphics: Phaser.GameObjects.Graphics;
+  protected config: CharacterConfig;
+
+  // Physics state (mutable, changes every frame)
+  public x: number;
+  public y: number;
+  protected velocity: number = 0;
+  protected rotation: number = 0;
+
+  // Animation state
+  protected flipperOffset: number = 0;
+  protected flipperDirection: number = 1;
+
+  // Physics parameters (initialized from config, can be overridden by debug system)
+  protected gravity: number;
+  protected swimUpForce: number;
+  protected diveDownForce: number;
+  protected maxVelocity: number;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, config: CharacterConfig) {
+    this.scene = scene;
+    this.x = x;
+    this.y = y;
+    this.config = config;
+
+    // Initialize physics from config (NOT hard-coded!)
+    this.gravity = config.physics.gravity;
+    this.swimUpForce = config.physics.swimUpForce;
+    this.diveDownForce = config.physics.diveDownForce;
+    this.maxVelocity = config.physics.maxVelocityY;
+
+    // Create graphics object for rendering
+    this.graphics = scene.add.graphics();
+    this.draw();
+  }
+
+  // Core update loop (called every frame by GameScene)
+  public update(): void {
+    this.velocity += this.gravity;
+    this.velocity = clamp(this.velocity, -this.maxVelocity, this.maxVelocity);
+    this.y += this.velocity;
+    this.rotation = clamp(
+      this.velocity * this.config.physics.rotationSpeed,
+      -this.config.physics.maxRotation,
+      this.config.physics.maxRotation
+    );
+    this.animateFlippers();
+    this.draw();
+  }
+
+  // Input methods
+  public swimUp(): void {
+    this.velocity = this.swimUpForce;
+    // TODO: this.scene.events.emit('character:swim', this.config.type);
+  }
+
+  public dive(): void {
+    this.velocity = this.diveDownForce;
+    // TODO: this.scene.events.emit('character:dive', this.config.type);
+  }
+
+  // Collision detection
+  public getBounds(): { x: number; y: number; width: number; height: number } {
+    const width = this.config.size.width * this.config.gameplay.hitboxScale;
+    const height = this.config.size.height * this.config.gameplay.hitboxScale;
+    return {
+      x: this.x - width / 2,
+      y: this.y - height / 2,
+      width,
+      height,
+    };
+  }
+
+  public isHittingTop(): boolean {
+    return this.y - (this.config.size.height / 2) <= 0;
+  }
+
+  public isHittingBottom(): boolean {
+    return this.y + (this.config.size.height / 2) >= this.scene.cameras.main.height;
+  }
+
+  // Rendering (programmatic graphics)
+  protected draw(): void {
+    this.graphics.clear();
+    this.graphics.setPosition(this.x, this.y);
+    this.graphics.setRotation(Phaser.Math.DegToRad(this.rotation));
+
+    // Dispatch to body-shape-specific rendering
+    switch (this.config.visuals.bodyShape) {
+      case BodyShape.SLEEK: this.drawSleekBody(); break;
+      case BodyShape.BULKY: this.drawBulkyBody(); break;
+      case BodyShape.ROUND:
+      default: this.drawRoundBody(); break;
+    }
+
+    this.drawFeatures();  // Eyes, nose, whiskers
+  }
+
+  protected drawRoundBody(): void {
+    // Seal: Classic round body
+    const g = this.graphics;
+    g.fillStyle(this.config.visuals.bodyColor, 1);
+    g.fillEllipse(0, 0, this.config.size.width, this.config.size.height);
+    // Head
+    g.fillEllipse(40, -5, 35, 30);
+    // Belly
+    if (this.config.visuals.bellyColor) {
+      g.fillStyle(this.config.visuals.bellyColor, 1);
+      g.fillEllipse(0, 8, this.config.size.width * 0.7, this.config.size.height * 0.6);
+    }
+    // Flippers (animated)
+    g.fillStyle(this.config.visuals.flipperColor, 1);
+    g.fillEllipse(-20, 15 + this.flipperOffset, 25, 15);
+    g.fillEllipse(10, 15 + this.flipperOffset, 25, 15);
+    // Tail
+    g.fillTriangle(-35, -10, -35, 10, -50, 0);
+  }
+
+  protected drawSleekBody(): void {
+    // Otter: Elongated streamlined body (2:1 ratio)
+    const g = this.graphics;
+    g.fillStyle(this.config.visuals.bodyColor, 1);
+    g.fillEllipse(0, 0, this.config.size.width * 1.1, this.config.size.height * 0.8);
+    g.fillEllipse(35, -3, 28, 22);  // Smaller pointy head
+    if (this.config.visuals.bellyColor) {
+      g.fillStyle(this.config.visuals.bellyColor, 1);
+      g.fillEllipse(5, 6, this.config.size.width * 0.8, this.config.size.height * 0.5);
+    }
+    // Paws instead of flippers
+    g.fillStyle(this.config.visuals.flipperColor, 1);
+    g.fillCircle(-18, 12 + this.flipperOffset, 8);
+    g.fillCircle(8, 12 + this.flipperOffset, 8);
+    // Tapered tail
+    g.beginPath();
+    g.moveTo(-30, -8);
+    g.lineTo(-30, 8);
+    g.lineTo(-48, 3);
+    g.lineTo(-48, -3);
+    g.closePath();
+    g.fillPath();
+  }
+
+  protected drawBulkyBody(): void {
+    // Sea Lion: Wide barrel-shaped body
+    const g = this.graphics;
+    g.fillStyle(this.config.visuals.bodyColor, 1);
+    g.fillEllipse(0, 0, this.config.size.width * 0.95, this.config.size.height * 1.1);
+    g.fillEllipse(42, -6, 40, 35);  // Larger head
+    if (this.config.visuals.bellyColor) {
+      g.fillStyle(this.config.visuals.bellyColor, 1);
+      g.fillEllipse(0, 10, this.config.size.width * 0.75, this.config.size.height * 0.65);
+    }
+    // Thick flippers
+    g.fillStyle(this.config.visuals.flipperColor, 1);
+    g.fillEllipse(-22, 18 + this.flipperOffset, 30, 18);
+    g.fillEllipse(12, 18 + this.flipperOffset, 30, 18);
+    // Thick tail
+    g.fillTriangle(-38, -12, -38, 12, -55, 0);
+    // EAR FLAPS (key sea lion feature!)
+    if (this.config.visuals.features.hasEarFlaps) {
+      g.fillTriangle(48, -18, 52, -14, 48, -12);  // Right ear
+    }
+  }
+
+  protected drawFeatures(): void {
+    const g = this.graphics;
+    // Eyes
+    g.fillStyle(this.config.visuals.eyeColor, 1);
+    g.fillCircle(45, -10, 5);
+    g.fillStyle(0x000000, 1);
+    g.fillCircle(47, -10, 3);  // Pupil
+    // Nose
+    g.fillStyle(this.config.visuals.noseColor, 1);
+    g.fillCircle(58, 0, 3);
+    // Whiskers (count varies by config)
+    this.drawWhiskers();
+  }
+
+  protected drawWhiskers(): void {
+    const g = this.graphics;
+    const whiskerType = this.config.visuals.features.whiskerLength;
+    let count = 3, length = 15, thickness = 1;
+    switch (whiskerType) {
+      case 'short': count = 2; length = 10; break;
+      case 'long': count = 4; length = 20; break;
+      case 'thick': thickness = 2; break;
+    }
+    g.lineStyle(thickness, 0x000000, 0.5);
+    for (let i = 0; i < count; i++) {
+      const yOffset = (i - Math.floor(count / 2)) * 5;
+      g.lineBetween(55, yOffset, 55 + length, yOffset + (i * 2));
+    }
+  }
+
+  // Debug system accessors (MUST implement for real-time tuning)
+  public getGravity(): number { return this.gravity; }
+  public setGravity(val: number): void { this.gravity = val; }
+  public getSwimUpForce(): number { return Math.abs(this.swimUpForce); }
+  public setSwimUpForce(val: number): void { this.swimUpForce = -Math.abs(val); }
+  public getDiveDownForce(): number { return this.diveDownForce; }
+  public setDiveDownForce(val: number): void { this.diveDownForce = val; }
+  public getMaxVelocity(): number { return this.maxVelocity; }
+  public setMaxVelocity(val: number): void { this.maxVelocity = val; }
+
+  public destroy(): void { this.graphics.destroy(); }
+}
+
+// src/entities/Seal.ts (Concrete class - 24 lines)
+import { Character } from './Character';
+import { SEAL_CHARACTER_CONFIG } from '../config/characters';
+
+export class Seal extends Character {
+  constructor(scene: Phaser.Scene, x: number, y: number) {
+    super(scene, x, y, SEAL_CHARACTER_CONFIG);  // That's it!
+  }
+}
+
+// src/entities/Otter.ts
+export class Otter extends Character {
+  constructor(scene: Phaser.Scene, x: number, y: number) {
+    super(scene, x, y, OTTER_CHARACTER_CONFIG);
+  }
+}
+
+// src/entities/SeaLion.ts
+export class SeaLion extends Character {
+  constructor(scene: Phaser.Scene, x: number, y: number) {
+    super(scene, x, y, SEALION_CHARACTER_CONFIG);
+  }
+}
+```
+
+---
+
+## PART 3: CRITICAL SYSTEMS & FEATURES
+
+### Debug System (DebugManager.ts - 670 lines)
+```typescript
+// Purpose: Real-time physics tuning WITHOUT recompiling
+// Keyboard: D (toggle), Arrows (navigate/adjust), R (reset), S (save), L (load)
+
+export interface DebugVariable {
+  category: string;      // "Player Physics", "Obstacle Settings", etc.
+  name: string;          // "Gravity", "Swim Up Force", etc.
+  key: string;           // Unique ID: "player.gravity"
+  getter: () => number;  // Function to read current value
+  setter: (val: number) => void;  // Function to write new value
+  min: number;           // Slider min
+  max: number;           // Slider max
+  step: number;          // Increment step (0.1, 0.5, 1, etc.)
+  defaultValue: number;  // Reset target
+  unit?: string;         // Display unit ("px", "ms", etc.)
+  description?: string;  // Tooltip text
+}
+
+export class DebugManager {
+  private scene: Phaser.Scene;
+  private variables: Map<string, DebugVariable> = new Map();
+  private isVisible: boolean = false;
+  private container?: Phaser.GameObjects.Container;
+  private selectedIndex: number = 0;
+
+  expose(category: string, name: string, key: string,
+         getter: () => number, setter: (val: number) => void,
+         options: { min, max, step, defaultValue, unit?, description? }): void {
+    this.variables.set(key, { category, name, key, getter, setter, ...options });
+  }
+
+  toggle(): void {
+    this.isVisible = !this.isVisible;
+    if (this.isVisible) this.show(); else this.hide();
+  }
+
+  private show(): void {
+    // Create UI panel
+    this.container = this.scene.add.container(20, 20).setDepth(10000);
+    // Background panel
+    const bg = this.scene.add.graphics();
+    bg.fillStyle(0x000000, 0.8);
+    bg.fillRoundedRect(0, 0, 400, 600, 8);
+    this.container.add(bg);
+    // Title
+    const title = this.scene.add.text(10, 10, 'Debug Panel (D to close)', { fontSize: '20px', color: '#00ff00' });
+    this.container.add(title);
+    // Variable list (render all exposed variables)
+    this.renderVariables();
+  }
+
+  private renderVariables(): void {
+    let y = 50;
+    this.variables.forEach((v, key) => {
+      const text = `${v.name}: ${v.getter().toFixed(2)}${v.unit || ''}`;
+      const label = this.scene.add.text(20, y, text, { fontSize: '16px', color: '#ffffff' });
+      this.container?.add(label);
+      y += 25;
+    });
+    // Instructions
+    const help = this.scene.add.text(20, 550, '↑↓ Navigate | ←→ Adjust | R Reset | S Save | L Load', { fontSize: '12px', color: '#888888' });
+    this.container?.add(help);
+  }
+
+  saveConfig(): void {
+    const config: Record<string, number> = {};
+    this.variables.forEach((v, key) => { config[key] = v.getter(); });
+    localStorage.setItem('flappyseal_debug_config', JSON.stringify(config));
+    console.log('Debug config saved:', config);
+  }
+
+  loadConfig(): void {
+    const stored = localStorage.getItem('flappyseal_debug_config');
+    if (!stored) return;
+    const config = JSON.parse(stored);
+    this.variables.forEach((v, key) => {
+      if (config[key] !== undefined) v.setter(config[key]);
+    });
+    console.log('Debug config loaded:', config);
+  }
+
+  resetAll(): void {
+    this.variables.forEach(v => v.setter(v.defaultValue));
+  }
+}
+
+// In GameScene.ts - expose variables
+private exposeDebugVariables(): void {
+  this.debugManager.expose('Player Physics', 'Gravity', 'player.gravity',
+    () => this.player!.getGravity(),
+    (val) => this.player!.setGravity(val),
+    { min: 0, max: 3, step: 0.1, defaultValue: 0.5, description: 'Downward acceleration' }
+  );
+  // Repeat for swimUpForce, diveDownForce, maxVelocity
+}
+
+// In GameScene.ts - keyboard handler
+this.input.keyboard?.on('keydown-D', () => {
+  this.debugManager?.toggle();
+});
+```
+
+**Production Strategy:**
+```typescript
+// In MenuScene.ts - secret unlock (tap version text 7 times)
+const versionText = this.add.text(10, 10, 'v1.0.0', { fontSize: '12px', color: '#888888' });
+versionText.setInteractive();
+let tapCount = 0;
+let tapTimer: any;
+
+versionText.on('pointerdown', () => {
+  tapCount++;
+  if (tapTimer) clearTimeout(tapTimer);
+  tapTimer = setTimeout(() => { tapCount = 0; }, 2000);
+
+  if (tapCount >= 7) {
+    localStorage.setItem('flappyseal_debug_enabled', 'true');
+    this.add.text(400, 300, 'Debug Mode Unlocked!\nPress D during gameplay', { fontSize: '24px', color: '#00ff00' }).setOrigin(0.5);
+    tapCount = 0;
+  }
+});
+
+// In GameScene.ts - check before exposing
+if (localStorage.getItem('flappyseal_debug_enabled') === 'true') {
+  this.debugManager = new DebugManager(this);
+  this.exposeDebugVariables();
+}
+```
+
+### Tutorial System (TutorialOverlay.ts - 540 lines)
+```typescript
+// 5-step interactive tutorial for first-time players
+// Step 1: Welcome + game explanation
+// Step 2: Swim up practice (tap left side 3x)
+// Step 3: Dive down practice (tap right side 3x)
+// Step 4: Avoid obstacles explanation
+// Step 5: Score points explanation
+
+export class TutorialOverlay {
+  private scene: Phaser.Scene;
+  private currentStep: number = 0;
+  private actionCount: number = 0;
+  private container?: Phaser.GameObjects.Container;
+
+  shouldShow(): boolean {
+    return localStorage.getItem('flappyseal_tutorial_seen') !== 'true';
+  }
+
+  start(): void {
+    this.createOverlay();  // Semi-transparent black (0.6 alpha)
+    this.showStep(0);      // Welcome message
+  }
+
+  private showStep(step: number): void {
+    // Clear previous
+    this.container?.removeAll(true);
+
+    // Create panel with title, description, action prompt
+    const panel = this.createPanel(stepConfig[step]);
+    this.container?.add(panel);
+
+    // Add highlight zone if needed (e.g., left/right side for practice)
+    if (stepConfig[step].highlight) {
+      this.drawHighlight(stepConfig[step].highlight);
+    }
+
+    // Add arrow indicator
+    if (stepConfig[step].arrow) {
+      this.drawArrow(stepConfig[step].arrow);
+    }
+  }
+
+  private handleInput(pointer: Phaser.Input.Pointer): void {
+    if (this.currentStep === 1) {  // Swim up practice
+      if (pointer.x < this.scene.cameras.main.width / 2) {
+        this.actionCount++;
+        if (this.actionCount >= 3) this.nextStep();
+      }
+    } else if (this.currentStep === 2) {  // Dive down practice
+      if (pointer.x >= this.scene.cameras.main.width / 2) {
+        this.actionCount++;
+        if (this.actionCount >= 3) this.nextStep();
+      }
+    } else {
+      this.nextStep();  // Any tap advances
+    }
+  }
+
+  private complete(): void {
+    localStorage.setItem('flappyseal_tutorial_seen', 'true');
+    this.scene.events.emit('tutorial:complete');
+    this.destroy();
+  }
+
+  skip(): void {
+    localStorage.setItem('flappyseal_tutorial_seen', 'true');
+    this.scene.events.emit('tutorial:skipped');
+    this.destroy();
+  }
+}
+
+// In GameScene.ts - integration
+create() {
+  // ... all other setup
+  this.tutorialOverlay = new TutorialOverlay(this);
+
+  this.events.on('tutorial:complete', () => {
+    if (!this.isGameStarted) this.startGame();
+  });
+
+  this.events.on('tutorial:skipped', () => {
+    if (!this.isGameStarted) this.startGame();
+  });
+}
+
+startGame() {
+  if (this.tutorialOverlay?.shouldShow()) {
+    this.tutorialOverlay.start();  // Shows tutorial, will emit event when done
+    return;
+  }
+  // Actual game start logic
+  this.isGameStarted = true;
+  // ...
+}
+```
+
+### Sound Integration (Ready but needs assets)
+```typescript
+// 11 integration points prepared with TODO comments
+
+// Character.ts
+swimUp() {
+  this.velocity = this.swimUpForce;
+  // TODO: Uncomment when audio ready
+  // this.scene.events.emit('character:swim', this.config.type);
+}
+
+// ScoreManager.ts
+addPoints(points: number) {
+  this.currentScore += points;
+  // TODO: Uncomment when audio ready
+  // this.scene.events.emit('score:increase', points, this.currentScore);
+
+  if (this.currentScore > this.highScore) {
+    this.highScore = this.currentScore;
+    // TODO: Uncomment when audio ready
+    // this.scene.events.emit('score:newrecord', this.highScore);
+  }
+}
+
+// GameScene.ts - add event listeners when audio ready
+this.events.on('character:swim', (characterType: CharacterType) => {
+  const soundKey = `character_swim_${characterType}`;
+  this.audioManager?.playSFX(soundKey);
+});
+
+this.events.on('score:increase', (points: number, totalScore: number) => {
+  this.audioManager?.playSFX('score_point');
+});
+
+// Required audio files (27 total):
+// Priority 1 (5): swim_up.mp3, dive_down.mp3, collision.mp3, game_over.mp3, score_point.mp3
+// Priority 2 (6): character_swim_seal.mp3, character_dive_seal.mp3, (repeat for otter/sealion)
+// Priority 3 (16): powerup_collect_*.mp3, powerup_activate_*.mp3
+```
+
+---
+
+## PART 4: MOBILE LAUNCH & BUILD CONFIGURATION
+
+### Capacitor Setup (Week 2 of launch)
+```bash
+# Step 1: Install Capacitor
+npm install @capacitor/core @capacitor/cli
+npm install @capacitor/ios @capacitor/android
+
+# Step 2: Initialize
+npx cap init
+# Prompts:
+#   App name: FlappySeal
+#   App ID: com.yourname.flappyseal (must be unique, reverse domain)
+#   Web dir: dist (Vite output folder)
+
+# Step 3: Add platforms
+npx cap add ios       # Requires Mac + Xcode
+npx cap add android   # Requires Android Studio (Mac/Windows/Linux)
+
+# Step 4: First sync (build web → copy to native)
+npm run build
+npx cap sync
+
+# Step 5: Open native projects
+npx cap open ios      # Opens Xcode
+npx cap open android  # Opens Android Studio
+```
+
+### iOS Configuration (Xcode)
+1. **App Settings:**
+   - Bundle Identifier: com.yourname.flappyseal
+   - Display Name: FlappySeal
+   - Version: 1.0
+   - Build: 1
+
+2. **Deployment:**
+   - Deployment Target: iOS 13.0+
+   - Devices: iPhone only
+   - Orientation: Portrait (uncheck all others)
+
+3. **Info.plist additions:**
+```xml
+<key>UIRequiresFullScreen</key>
+<true/>
+<key>UIStatusBarStyle</key>
+<string>UIStatusBarStyleLightContent</string>
+<key>UISupportedInterfaceOrientations</key>
+<array>
+  <string>UIInterfaceOrientationPortrait</string>
+</array>
+```
+
+4. **App Icons:**
+   - Add 1024×1024 PNG to Assets.xcassets/AppIcon
+   - Xcode auto-generates all sizes
+
+5. **Splash Screen:**
+   - Use LaunchScreen.storyboard with centered 2732×2732 image
+
+### Android Configuration (Android Studio)
+1. **build.gradle (app level):**
+```gradle
+android {
+    namespace "com.yourname.flappyseal"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.yourname.flappyseal"
+        minSdkVersion 22  // Android 5.1+
+        targetSdkVersion 34
+        versionCode 1
+        versionName "1.0"
+    }
+}
+```
+
+2. **AndroidManifest.xml:**
+```xml
+<application
+    android:label="FlappySeal"
+    android:icon="@mipmap/ic_launcher"
+    android:screenOrientation="portrait"
+    android:configChanges="orientation|keyboardHidden">
+</application>
+```
+
+3. **App Icons:**
+   - Add icons to res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}
+   - Sizes: 48, 72, 96, 144, 192 px
+
+4. **Splash Screen:**
+   - res/drawable/splash.png
+
+### Build Process
+```bash
+# Development (hot reload)
+npm run dev  # Web version for testing
+npm run build && npx cap sync && npx cap run ios  # iOS simulator
+npm run build && npx cap sync && npx cap run android  # Android emulator
+
+# Production builds
+# iOS: Xcode → Product → Archive → Distribute App → Upload to App Store Connect
+# Android: Build → Generate Signed Bundle/APK → Upload to Play Console
+
+# Environment variables (create .env.production)
+VITE_DEBUG_ENABLED=false
+VITE_APP_VERSION=1.0.0
+VITE_FIREBASE_API_KEY=your-key
+```
+
+### Firebase Analytics Setup
+```bash
+npm install firebase @capacitor-firebase/analytics
+
+# Create Firebase project at console.firebase.google.com
+# Add iOS app (bundle ID: com.yourname.flappyseal)
+# Download GoogleService-Info.plist → ios/App/App/
+# Add Android app (package name: com.yourname.flappyseal)
+# Download google-services.json → android/app/
+```
+
+```typescript
+// In GameScene.ts
+import { FirebaseAnalytics } from '@capacitor-firebase/analytics';
+
+startGame() {
+  FirebaseAnalytics.logEvent({
+    name: 'game_start',
+    params: { character: this.player.getType() }
+  });
+}
+
+gameOver() {
+  FirebaseAnalytics.logEvent({
+    name: 'game_over',
+    params: {
+      score: this.scoreManager.getScore(),
+      character: this.player.getType()
+    }
+  });
+}
+```
+
+### Launch Costs & Accounts
+- **Apple Developer Program:** $99/year (required for iOS)
+- **Google Play Console:** $25 one-time (required for Android)
+- **Firebase:** Free tier sufficient
+- **Domain (optional):** $10/year for privacy policy hosting
+- **Total minimum:** $124
+
+### App Store Requirements
+1. **Privacy Policy** (required):
+   - Host on GitHub Pages (free) or your domain
+   - Use template from privacypolicygenerator.info
+   - Must disclose: data collected (scores, prefs), analytics, third-party services
+
+2. **Screenshots** (required):
+   - iOS: 6.5" display (1284×2778) + 5.5" display (1242×2208)
+   - Android: 1920×1080 minimum, at least 2 screenshots
+   - Take 5-10 screenshots: menu, character select, gameplay (all 3 animals), game over
+
+3. **App Description:**
+   - Short: 80 chars (Android), Subtitle: 30 chars (iOS)
+   - Full: Up to 4000 chars
+   - Keywords: seal, ocean, flappy, arcade, endless, casual
+
+4. **Age Rating:**
+   - Complete questionnaire
+   - FlappySeal likely qualifies as 4+ (iOS) / Everyone (Android)
+   - No violence, gambling, alcohol, etc.
+
+5. **TestFlight Beta (iOS):**
+   - Upload via Xcode → Automatically available for testers
+   - Add internal testers (up to 100) by email
+   - External testers require Apple review (1-2 days)
+
+6. **Play Store Internal Testing (Android):**
+   - Create Internal Testing track in Play Console
+   - Add testers by email
+   - Instant availability, no review needed
+
+---
+
+## PART 5: REBUILD CHECKLIST & TROUBLESHOOTING
+
+### Step-by-Step Rebuild (If Starting Fresh)
+```bash
+# 1. Create project
+npm create vite@latest flappyseal -- --template vanilla-ts
+cd flappyseal
+npm install
+
+# 2. Install Phaser
+npm install phaser
+
+# 3. Install Capacitor
+npm install @capacitor/core @capacitor/cli @capacitor/ios @capacitor/android
+
+# 4. Create folder structure
+mkdir -p src/{config,entities,scenes,systems,managers,modes,ui,utils}
+
+# 5. Implement in this order:
+# - config/constants.ts (GAME_CONFIG, UI_CONFIG)
+# - config/characters.ts (CharacterConfig + 3 configs)
+# - utils/helpers.ts (clamp function)
+# - utils/storage.ts (StorageManager)
+# - entities/Character.ts (base class)
+# - entities/{Seal,Otter,SeaLion}.ts
+# - scenes/GameScene.ts (core loop)
+# - managers/DebugManager.ts
+# - systems/TutorialOverlay.ts
+# - scenes/CharacterSelectScene.ts
+# - ui/UIComponents.ts
+# - scenes/MenuScene.ts
+
+# 6. Initialize Capacitor
+npx cap init
+npx cap add ios
+npx cap add android
+
+# 7. Test
+npm run dev  # Web version
+npm run build && npx cap sync && npx cap run ios
+```
+
+### Common Errors & Fixes
+**Error:** "Cannot find module 'phaser'"
+- **Fix:** `npm install phaser`, ensure in dependencies not devDependencies
+
+**Error:** "Property 'gravity' does not exist on type 'Character'"
+- **Fix:** Ensure `protected gravity: number;` declared in Character class
+
+**Error:** Touch not working on mobile
+- **Fix:** Check `this.input.setDefaultCursor('pointer')` in GameScene, ensure `setInteractive()` called
+
+**Error:** Audio doesn't play on iOS
+- **Fix:** iOS requires user interaction before audio. Ensure tutorial tap counts, or use Capacitor NativeAudio plugin
+
+**Error:** App crashes on startup (native)
+- **Fix:** Check native logs (Xcode: Console, Android Studio: Logcat). Common: missing GoogleService files
+
+**Error:** Characters not unlocking
+- **Fix:** Check localStorage.getItem('flappyseal_high_score'), ensure ScoreManager.setHighScore() called
+
+**Error:** Debug UI not showing
+- **Fix:** Ensure DebugManager.show() called, check z-depth (setDepth(10000))
+
+### Performance Optimization
+- **Target:** 60 FPS on iPhone 11 / Pixel 5 equivalent
+- **Measure:** Use debug panel FPS counter
+- **If slow:**
+  1. Reduce particle count in ParticleManager
+  2. Disable character redraw if off-screen
+  3. Use sprite caching (convert Graphics to BitmapData)
+  4. Lower physics update rate to 30 FPS for old devices
+
+### Storage Keys (localStorage)
+```typescript
+'flappyseal_high_score'           // number
+'flappyseal_tutorial_seen'        // 'true' | 'false'
+'flappyseal_selected_character'   // 'seal' | 'otter' | 'sealion'
+'flappyseal_debug_enabled'        // 'true' | 'false'
+'flappyseal_debug_config'         // JSON string of debug values
+'flappyseal_settings'             // JSON: { musicEnabled, sfxEnabled, musicVolume, sfxVolume }
+```
+
+### Critical Files Reference
+1. **characters.ts:** All character configs, unlock logic
+2. **Character.ts:** Physics update loop, rendering logic
+3. **GameScene.ts:** Main game loop, input handling, collision detection
+4. **DebugManager.ts:** Real-time tuning, save/load configs
+5. **TutorialOverlay.ts:** First-time user experience
+6. **CharacterSelectScene.ts:** Character picker UI
+7. **storage.ts:** All persistence operations
+8. **capacitor.config.ts:** Mobile app configuration
+
+### Success Criteria (Launch Readiness)
+- [ ] All 3 characters render correctly
+- [ ] Physics feels balanced (play 50+ games each)
+- [ ] Tutorial completes without errors
+- [ ] High scores persist across sessions
+- [ ] Character unlocks work (score 500, 1000)
+- [ ] Debug panel shows/hides with D key
+- [ ] Builds successfully on iOS simulator
+- [ ] Builds successfully on Android emulator
+- [ ] Runs 60 FPS on physical devices
+- [ ] Touch controls work (left/right split)
+- [ ] No console errors
+- [ ] Privacy policy live at URL
+- [ ] App icons and splash screens configured
+- [ ] Firebase Analytics tracking events
+
+**When all boxes checked: Ready to submit to app stores! 🚀**
+
+---
+
+**This document contains 100% of critical information from all discussions. Use it to either:**
+1. **Rebuild from scratch:** Follow step-by-step implementation order
+2. **Debug existing code:** Reference architecture and expected behavior
+3. **Explain to new developer:** Complete technical specification
+
+**Key files generated during sessions:**
+- `docs/MOBILE_ONLY_LAUNCH_PLAN.md` - 6-week timeline
+- `docs/PRE_LAUNCH_CHECKLIST.md` - 150+ task checklist
+- `docs/SOUND_EFFECTS_GUIDE.md` - Audio integration guide
+- `docs/FLAPPY_BIRD_ANALYSIS.md` - Physics comparison
+- All implementation files in `src/` (character system, debug, tutorial, etc.)
