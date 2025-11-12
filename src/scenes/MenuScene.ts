@@ -113,14 +113,14 @@ export class MenuScene extends Phaser.Scene {
    */
   private createMenuButtons(): void {
     const buttonConfig = [
-      { text: '▶ Play', key: 'play', color: UI_CONFIG.COLORS.SUCCESS },
-      { text: '🎨 Unlocks', key: 'unlocks', color: UI_CONFIG.COLORS.PRIMARY },
-      { text: '🏆 Achievements', key: 'achievements', color: UI_CONFIG.COLORS.WARNING },
-      { text: '⚙️ Settings', key: 'settings', color: UI_CONFIG.COLORS.SECONDARY },
+      { text: '⚡ QUICK PLAY', key: 'quickplay', color: '#ff6600', size: 1.2 }, // NEW: Instant start
+      { text: '▶ Play Modes', key: 'play', color: UI_CONFIG.COLORS.SUCCESS, size: 1.0 },
+      { text: '🏆 Achievements', key: 'achievements', color: UI_CONFIG.COLORS.WARNING, size: 0.9 },
+      { text: '⚙️ Settings', key: 'settings', color: UI_CONFIG.COLORS.SECONDARY, size: 0.9 },
     ];
 
-    const startY = 280;
-    const spacing = 80;
+    const startY = 250;
+    const spacing = 70;
 
     buttonConfig.forEach((config, index) => {
       const button = this.createButton(
@@ -129,7 +129,8 @@ export class MenuScene extends Phaser.Scene {
         config.text,
         config.color,
         () => this.onButtonClick(config.key),
-        index
+        index,
+        config.size || 1.0
       );
       this.buttons.push(button);
     });
@@ -144,20 +145,25 @@ export class MenuScene extends Phaser.Scene {
     text: string,
     color: string,
     callback: () => void,
-    index: number
+    index: number,
+    sizeMultiplier: number = 1.0
   ): Phaser.GameObjects.Container {
     const container = this.add.container(x, y);
+
+    const baseWidth = 300 * sizeMultiplier;
+    const baseHeight = 50 * sizeMultiplier;
+    const fontSize = 24 * sizeMultiplier;
 
     // Background
     const bg = this.add.graphics();
     bg.fillStyle(parseInt(color.replace('#', '0x')), 0.8);
-    bg.fillRoundedRect(-150, -25, 300, 50, 10);
+    bg.fillRoundedRect(-baseWidth/2, -baseHeight/2, baseWidth, baseHeight, 10);
     bg.lineStyle(3, 0xffffff, 1);
-    bg.strokeRoundedRect(-150, -25, 300, 50, 10);
+    bg.strokeRoundedRect(-baseWidth/2, -baseHeight/2, baseWidth, baseHeight, 10);
 
     // Text
     const buttonText = this.add.text(0, 0, text, {
-      fontSize: '24px',
+      fontSize: `${fontSize}px`,
       color: '#ffffff',
       fontStyle: 'bold',
       fontFamily: 'Arial',
@@ -178,9 +184,9 @@ export class MenuScene extends Phaser.Scene {
       });
       bg.clear();
       bg.fillStyle(parseInt(color.replace('#', '0x')), 1);
-      bg.fillRoundedRect(-150, -25, 300, 50, 10);
+      bg.fillRoundedRect(-baseWidth/2, -baseHeight/2, baseWidth, baseHeight, 10);
       bg.lineStyle(4, 0xffff00, 1);
-      bg.strokeRoundedRect(-150, -25, 300, 50, 10);
+      bg.strokeRoundedRect(-baseWidth/2, -baseHeight/2, baseWidth, baseHeight, 10);
     });
 
     container.on('pointerout', () => {
@@ -193,9 +199,9 @@ export class MenuScene extends Phaser.Scene {
       });
       bg.clear();
       bg.fillStyle(parseInt(color.replace('#', '0x')), 0.8);
-      bg.fillRoundedRect(-150, -25, 300, 50, 10);
+      bg.fillRoundedRect(-baseWidth/2, -baseHeight/2, baseWidth, baseHeight, 10);
       bg.lineStyle(3, 0xffffff, 1);
-      bg.strokeRoundedRect(-150, -25, 300, 50, 10);
+      bg.strokeRoundedRect(-baseWidth/2, -baseHeight/2, baseWidth, baseHeight, 10);
     });
 
     container.on('pointerdown', () => {
@@ -226,11 +232,13 @@ export class MenuScene extends Phaser.Scene {
 
     this.cameras.main.once('camerafadeoutcomplete', () => {
       switch (key) {
+        case 'quickplay':
+          // NEW: Instant start to Endless mode
+          this.registry.set('gameMode', 'ENDLESS');
+          this.scene.start('GameScene');
+          break;
         case 'play':
           this.scene.start('ModeSelectionScene');
-          break;
-        case 'unlocks':
-          this.scene.start('UnlockScene');
           break;
         case 'achievements':
           this.scene.start('AchievementScene');

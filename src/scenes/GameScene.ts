@@ -389,28 +389,65 @@ export class GameScene extends Phaser.Scene {
       ease: 'Back.easeOut',
     });
 
-    // Show final score
+    // Show final score with rating
+    const finalScore = this.scoreManager?.getScore() || 0;
+    let rating = '';
+    let ratingColor = '#ffffff';
+
+    if (finalScore < 5) {
+      rating = 'Keep trying!';
+      ratingColor = '#888888';
+    } else if (finalScore < 10) {
+      rating = 'Not bad!';
+      ratingColor = '#44ff44';
+    } else if (finalScore < 25) {
+      rating = 'Good job!';
+      ratingColor = '#ffaa00';
+    } else if (finalScore < 50) {
+      rating = 'Great!';
+      ratingColor = '#ff6600';
+    } else if (finalScore < 100) {
+      rating = 'Impressive!';
+      ratingColor = '#00d4ff';
+    } else {
+      rating = 'LEGENDARY!';
+      ratingColor = '#ff00ff';
+    }
+
     const finalScoreText = this.add.text(
       GAME_CONFIG.WIDTH / 2,
-      GAME_CONFIG.HEIGHT / 2 + 30,
-      `Score: ${this.scoreManager?.getScore() || 0}`,
+      GAME_CONFIG.HEIGHT / 2 + 10,
+      `Score: ${finalScore}`,
       {
-        fontSize: '32px',
+        fontSize: '48px',
         color: UI_CONFIG.COLORS.PRIMARY,
+        fontStyle: 'bold',
         stroke: UI_CONFIG.COLORS.BACKGROUND,
         strokeThickness: 6,
       }
     ).setOrigin(0.5).setDepth(100);
 
+    const ratingText = this.add.text(
+      GAME_CONFIG.WIDTH / 2,
+      GAME_CONFIG.HEIGHT / 2 + 60,
+      rating,
+      {
+        fontSize: '24px',
+        color: ratingColor,
+        fontStyle: 'bold',
+      }
+    ).setOrigin(0.5).setDepth(100);
+
     // Show high score if new record
-    if (this.scoreManager && this.scoreManager.getScore() === this.scoreManager.getHighScore()) {
+    if (this.scoreManager && this.scoreManager.getScore() === this.scoreManager.getHighScore() && finalScore > 0) {
       const newRecordText = this.add.text(
         GAME_CONFIG.WIDTH / 2,
-        GAME_CONFIG.HEIGHT / 2 + 70,
-        '🏆 New Record! 🏆',
+        GAME_CONFIG.HEIGHT / 2 + 100,
+        '🏆 NEW RECORD! 🏆',
         {
-          fontSize: '24px',
+          fontSize: '28px',
           color: UI_CONFIG.COLORS.SUCCESS,
+          fontStyle: 'bold',
           stroke: UI_CONFIG.COLORS.BACKGROUND,
           strokeThickness: 4,
         }
@@ -424,6 +461,17 @@ export class GameScene extends Phaser.Scene {
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
+    } else {
+      // Show best score
+      const bestText = this.add.text(
+        GAME_CONFIG.WIDTH / 2,
+        GAME_CONFIG.HEIGHT / 2 + 100,
+        `Best: ${this.scoreManager?.getHighScore() || 0}`,
+        {
+          fontSize: '20px',
+          color: '#aaaaaa',
+        }
+      ).setOrigin(0.5).setDepth(100);
     }
 
     // Restart button (visual button, not just text)
