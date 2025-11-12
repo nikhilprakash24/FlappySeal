@@ -91,6 +91,7 @@ export const UI_CONFIG = {
     SECONDARY: '#00d4ff',
     DANGER: '#ff4444',
     SUCCESS: '#44ff44',
+    WARNING: '#ffaa00',
     BACKGROUND: '#0a4f6e',
   },
 

@@ -228,6 +228,24 @@ export class Obstacle {
   }
 
   /**
+   * Hide obstacle and prepare for pooling (don't destroy graphics)
+   */
+  hide(): void {
+    this.topObstacle.clear();
+    this.bottomObstacle.clear();
+    this.topObstacle.setVisible(false);
+    this.bottomObstacle.setVisible(false);
+  }
+
+  /**
+   * Show obstacle (make visible)
+   */
+  private show(): void {
+    this.topObstacle.setVisible(true);
+    this.bottomObstacle.setVisible(true);
+  }
+
+  /**
    * Reset obstacle for object pooling
    */
   reset(x: number, gapY: number, gapSize: number, type: ObstacleType): void {
@@ -236,6 +254,7 @@ export class Obstacle {
     this.gapSize = gapSize;
     this.type = type;
     this.passed = false;
+    this.show();
     this.draw();
   }
 }

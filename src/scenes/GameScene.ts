@@ -254,6 +254,11 @@ export class GameScene extends Phaser.Scene {
     this.isGameStarted = true;
     this.gameState = GameState.PLAYING;
 
+    // Ensure seal is in valid starting position
+    if (this.seal) {
+      this.seal.reset(SEAL_CONFIG.START_X, SEAL_CONFIG.START_Y);
+    }
+
     // Hide start screen UI
     this.titleText?.destroy();
     this.instructionText?.destroy();
@@ -448,9 +453,18 @@ export class GameScene extends Phaser.Scene {
 
     // Check boundary collisions (unless ghost mode is active)
     const shouldCheckCollision = !this.powerUpSystem?.shouldIgnoreCollision();
-    if (shouldCheckCollision && (this.seal.isHittingTop() || this.seal.isHittingBottom())) {
-      this.handleCollision();
-      return;
+
+    // Only check collisions if seal is in a valid state
+    const sealBounds = this.seal.getBounds();
+    const isValidSealPosition = sealBounds &&
+      sealBounds.y > -50 &&
+      sealBounds.y < GAME_CONFIG.HEIGHT + 50;
+
+    if (shouldCheckCollision && isValidSealPosition) {
+      if (this.seal.isHittingTop() || this.seal.isHittingBottom()) {
+        this.handleCollision();
+        return;
+      }
     }
 
     // Update obstacles and check for points

@@ -119,7 +119,7 @@ export class ModeSelectionScene extends Phaser.Scene {
       const x = startX + col * (cardWidth + padding);
       const y = startY + row * (cardHeight + padding);
 
-      this.createModeCard(x, y, cardWidth, cardHeight, mode);
+      this.createModeCard(x, y, cardWidth, cardHeight, mode, index);
     });
   }
 
@@ -131,7 +131,8 @@ export class ModeSelectionScene extends Phaser.Scene {
     y: number,
     width: number,
     height: number,
-    mode: ModeOption
+    mode: ModeOption,
+    index: number
   ): void {
     const container = this.add.container(x, y);
 

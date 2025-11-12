@@ -128,7 +128,8 @@ export class MenuScene extends Phaser.Scene {
         startY + index * spacing,
         config.text,
         config.color,
-        () => this.onButtonClick(config.key)
+        () => this.onButtonClick(config.key),
+        index
       );
       this.buttons.push(button);
     });
@@ -142,7 +143,8 @@ export class MenuScene extends Phaser.Scene {
     y: number,
     text: string,
     color: string,
-    callback: () => void
+    callback: () => void,
+    index: number
   ): Phaser.GameObjects.Container {
     const container = this.add.container(x, y);
 

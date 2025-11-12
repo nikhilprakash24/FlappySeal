@@ -31,7 +31,7 @@ export class ObstacleManager {
     // Pre-create some obstacles for the pool
     for (let i = 0; i < 5; i++) {
       const obstacle = this.createObstacle(GAME_CONFIG.WIDTH + 100, 300, 200, ObstacleType.CORAL);
-      obstacle.destroy(); // Destroy graphics, we'll recreate when needed
+      obstacle.hide(); // Hide but don't destroy graphics, ready for reuse
       this.obstaclePool.push(obstacle);
     }
   }
@@ -64,7 +64,7 @@ export class ObstacleManager {
    * Return an obstacle to the pool
    */
   private returnToPool(obstacle: Obstacle): void {
-    obstacle.destroy();
+    obstacle.hide(); // Hide but don't destroy, ready for reuse
     this.obstaclePool.push(obstacle);
   }
 
@@ -100,6 +100,11 @@ export class ObstacleManager {
 
     // Update scroll speed based on score (difficulty progression)
     this.updateScrollSpeed();
+
+    // Initialize lastSpawnTime on first update to prevent immediate spawning
+    if (this.lastSpawnTime === 0) {
+      this.lastSpawnTime = time;
+    }
 
     // Spawn new obstacles
     if (time - this.lastSpawnTime > OBSTACLE_CONFIG.SPAWN_INTERVAL) {
@@ -147,6 +152,11 @@ export class ObstacleManager {
    * Check collision with seal
    */
   checkCollision(sealX: number, sealY: number, sealWidth: number, sealHeight: number): boolean {
+    // Validate seal bounds
+    if (sealWidth <= 0 || sealHeight <= 0) {
+      return false;
+    }
+
     const sealBounds = {
       x: sealX,
       y: sealY,
@@ -155,25 +165,25 @@ export class ObstacleManager {
     };
 
     for (const obstacle of this.obstacles) {
-      // Skip obstacles that haven't reached the seal yet
-      if (obstacle.x > sealX + sealWidth) {
+      // Skip obstacles that haven't reached the seal yet (with buffer)
+      if (obstacle.x > sealX + sealWidth + 10) {
         continue;
       }
 
-      // Skip obstacles that the seal has already passed
-      if (obstacle.x + OBSTACLE_CONFIG.WIDTH < sealX) {
+      // Skip obstacles that the seal has already passed (with buffer)
+      if (obstacle.x + OBSTACLE_CONFIG.WIDTH + 10 < sealX) {
         continue;
       }
 
       // Check collision with top obstacle
       const topBounds = obstacle.getTopBounds();
-      if (this.boundsOverlap(sealBounds, topBounds)) {
+      if (topBounds.height > 0 && this.boundsOverlap(sealBounds, topBounds)) {
         return true;
       }
 
       // Check collision with bottom obstacle
       const bottomBounds = obstacle.getBottomBounds();
-      if (this.boundsOverlap(sealBounds, bottomBounds)) {
+      if (bottomBounds.height > 0 && this.boundsOverlap(sealBounds, bottomBounds)) {
         return true;
       }
     }
