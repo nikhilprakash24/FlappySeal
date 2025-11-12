@@ -227,10 +227,16 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // ESC key for pause
+    // ESC key for pause/menu
     this.input.keyboard?.on('keydown-ESC', () => {
       if (this.gameState === GameState.PLAYING) {
         this.togglePause();
+      } else if (this.gameState === GameState.GAME_OVER) {
+        // Return to menu from game over screen
+        this.cameras.main.fadeOut(300);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+          this.scene.start('MenuScene');
+        });
       }
     });
 
@@ -474,13 +480,16 @@ export class GameScene extends Phaser.Scene {
       ).setOrigin(0.5).setDepth(100);
     }
 
-    // Restart button (visual button, not just text)
-    const buttonWidth = 200;
+    // Action buttons (Restart and Menu)
+    const buttonWidth = 180;
     const buttonHeight = 50;
-    const buttonX = GAME_CONFIG.WIDTH / 2;
-    const buttonY = GAME_CONFIG.HEIGHT - 100;
+    const buttonSpacing = 20;
+    const buttonsY = GAME_CONFIG.HEIGHT - 100;
+    const totalWidth = buttonWidth * 2 + buttonSpacing;
+    const startX = (GAME_CONFIG.WIDTH - totalWidth) / 2;
 
-    const buttonContainer = this.add.container(buttonX, buttonY).setDepth(100);
+    // Restart button
+    const restartContainer = this.add.container(startX + buttonWidth / 2, buttonsY).setDepth(100);
 
     const buttonBg = this.add.graphics();
     buttonBg.fillStyle(0x44ff44, 1);
@@ -488,54 +497,111 @@ export class GameScene extends Phaser.Scene {
     buttonBg.lineStyle(3, 0xffffff, 1);
     buttonBg.strokeRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
 
-    const buttonText = this.add.text(0, 0, '↻ Restart', {
-      fontSize: '24px',
+    const restartText = this.add.text(0, 0, '↻ Restart', {
+      fontSize: '22px',
       color: '#ffffff',
       fontStyle: 'bold',
       fontFamily: 'Arial',
     }).setOrigin(0.5);
 
-    buttonContainer.add([buttonBg, buttonText]);
-    buttonContainer.setSize(buttonWidth, buttonHeight);
-    buttonContainer.setInteractive({ useHandCursor: true });
+    restartContainer.add([buttonBg, restartText]);
+    restartContainer.setSize(buttonWidth, buttonHeight);
+    restartContainer.setInteractive({ useHandCursor: true });
 
-    // Hover effects
-    buttonContainer.on('pointerover', () => {
+    // Restart hover effects
+    restartContainer.on('pointerover', () => {
       buttonBg.clear();
       buttonBg.fillStyle(0x55ff55, 1);
       buttonBg.fillRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
       buttonBg.lineStyle(4, 0xffff00, 1);
       buttonBg.strokeRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
       this.tweens.add({
-        targets: buttonContainer,
+        targets: restartContainer,
         scaleX: 1.1,
         scaleY: 1.1,
         duration: 100,
       });
     });
 
-    buttonContainer.on('pointerout', () => {
+    restartContainer.on('pointerout', () => {
       buttonBg.clear();
       buttonBg.fillStyle(0x44ff44, 1);
       buttonBg.fillRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
       buttonBg.lineStyle(3, 0xffffff, 1);
       buttonBg.strokeRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
       this.tweens.add({
-        targets: buttonContainer,
+        targets: restartContainer,
         scaleX: 1,
         scaleY: 1,
         duration: 100,
       });
     });
 
-    buttonContainer.on('pointerdown', () => {
+    restartContainer.on('pointerdown', () => {
       this.cameras.main.shake(100, 0.01);
       this.restartGame();
     });
 
-    // Pulse animation
+    // Menu button
+    const menuContainer = this.add.container(startX + buttonWidth * 1.5 + buttonSpacing, buttonsY).setDepth(100);
+
+    const menuBg = this.add.graphics();
+    menuBg.fillStyle(0x4488ff, 1);
+    menuBg.fillRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
+    menuBg.lineStyle(3, 0xffffff, 1);
+    menuBg.strokeRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
+
+    const menuText = this.add.text(0, 0, '◄ Menu', {
+      fontSize: '22px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      fontFamily: 'Arial',
+    }).setOrigin(0.5);
+
+    menuContainer.add([menuBg, menuText]);
+    menuContainer.setSize(buttonWidth, buttonHeight);
+    menuContainer.setInteractive({ useHandCursor: true });
+
+    // Menu hover effects
+    menuContainer.on('pointerover', () => {
+      menuBg.clear();
+      menuBg.fillStyle(0x5599ff, 1);
+      menuBg.fillRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
+      menuBg.lineStyle(4, 0xffff00, 1);
+      menuBg.strokeRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
+      this.tweens.add({
+        targets: menuContainer,
+        scaleX: 1.1,
+        scaleY: 1.1,
+        duration: 100,
+      });
+    });
+
+    menuContainer.on('pointerout', () => {
+      menuBg.clear();
+      menuBg.fillStyle(0x4488ff, 1);
+      menuBg.fillRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
+      menuBg.lineStyle(3, 0xffffff, 1);
+      menuBg.strokeRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 10);
+      this.tweens.add({
+        targets: menuContainer,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 100,
+      });
+    });
+
+    menuContainer.on('pointerdown', () => {
+      this.cameras.main.shake(100, 0.01);
+      this.cameras.main.fadeOut(300);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('MenuScene');
+      });
+    });
+
+    // Pulse animation for both buttons
     this.tweens.add({
-      targets: buttonContainer,
+      targets: [restartContainer, menuContainer],
       scaleX: 1.05,
       scaleY: 1.05,
       duration: 800,
@@ -544,13 +610,13 @@ export class GameScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
-    // Also show keyboard hint
+    // Updated keyboard hint
     const hintText = this.add.text(
       GAME_CONFIG.WIDTH / 2,
       GAME_CONFIG.HEIGHT - 40,
-      'Press SPACE or Click Button',
+      'Press SPACE to Restart | ESC for Menu',
       {
-        fontSize: '16px',
+        fontSize: '14px',
         color: '#aaaaaa',
         fontFamily: 'Arial',
       }
@@ -677,9 +743,23 @@ export class GameScene extends Phaser.Scene {
     // Update seal physics
     this.seal.update();
 
-    // Create swim trail effect
-    if (this.particleManager && time % 100 < 16) {
-      this.particleManager.createTrail(this.seal.x - 30, this.seal.y);
+    // IMPROVED: Dynamic swim trail based on velocity
+    if (this.particleManager) {
+      const velocity = Math.abs(this.seal.getVelocity());
+
+      // More frequent trails when moving fast
+      if (time % (velocity > 5 ? 50 : 100) < 16) {
+        this.particleManager.createTrail(this.seal.x - 30, this.seal.y);
+      }
+
+      // Extra bubble stream when diving or swimming fast
+      if (velocity > 7 && time % 200 < 16) {
+        this.particleManager.createBubbleStream(
+          this.seal.x - 40,
+          this.seal.y,
+          2
+        );
+      }
     }
 
     // Check boundary collisions (unless ghost mode is active)
@@ -716,10 +796,23 @@ export class GameScene extends Phaser.Scene {
           }
         }
 
-        // Create score celebration effect
-        if (this.particleManager) {
+        // IMPROVED: More satisfying score feedback
+        if (this.particleManager && this.seal) {
+          // Score pop with particles
           this.particleManager.createScorePop(this.seal.x, this.seal.y);
+          // Extra burst of bubbles
+          this.particleManager.createBubbleStream(this.seal.x + 30, this.seal.y, 5);
         }
+
+        // IMPROVED: Subtle screen shake for satisfaction
+        this.cameras.main.shake(80, 0.003);
+
+        // IMPROVED: Brief zoom pulse
+        this.cameras.main.zoomTo(1.02, 50);
+        this.time.delayedCall(50, () => {
+          this.cameras.main.zoomTo(1.0, 100);
+        });
+
         // Play score sound
         this.audioManager?.playSFX(AUDIO_CONFIG.SOUNDS.SCORE);
       }
@@ -770,9 +863,29 @@ export class GameScene extends Phaser.Scene {
       return; // Survive the collision
     }
 
-    // IMPROVED: More dramatic collision feedback
-    this.cameras.main.shake(400, 0.015); // Stronger shake
-    this.cameras.main.flash(200, 255, 0, 0); // Red flash
+    // IMPROVED: MUCH more dramatic collision feedback
+    // Intense screen shake
+    this.cameras.main.shake(500, 0.02);
+
+    // Red flash + brief slowdown effect
+    this.cameras.main.flash(250, 255, 0, 0, true);
+
+    // Zoom in slightly on impact
+    this.cameras.main.zoomTo(1.05, 100);
+    this.time.delayedCall(100, () => {
+      this.cameras.main.zoomTo(1.0, 300);
+    });
+
+    // Extra particle explosion
+    if (this.particleManager && this.seal) {
+      this.particleManager.createExplosion(this.seal.x, this.seal.y);
+      // Secondary explosion burst
+      this.time.delayedCall(100, () => {
+        if (this.particleManager && this.seal) {
+          this.particleManager.createExplosion(this.seal.x, this.seal.y);
+        }
+      });
+    }
 
     // No shield - game over
     this.gameOver();
